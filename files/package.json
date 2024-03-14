@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "@angular/common": "^16.2.12",
+    "keycloak-angular": "latest"
+  },
+  "dependencyParser": {
+    "keycloak-angular": "latest"
+  }
+}
