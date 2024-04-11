@@ -23,6 +23,7 @@ export class Parser {
      * Parse UCS2 encoded console output file.
      * Can be created by running Powershell Out-Dir command with "npm/pnpm install".
      * @param output Content of the output file.
+     * @deprecated
      */
     public parseConsoleOutput(output: string) {
         const dependencyInfos: DependencyInfo[] = [];
@@ -45,6 +46,7 @@ export class Parser {
      * Parses a markdown file for dependency matrices and returns a list of dependency entries.
      * @param markdown The string of the markdown file.
      * @param packageName Name of the package to find dependencies for.
+     * @deprecated
      */
     public parseMarkdown(markdown: string, packageName: string): DependencyEntry[] {
         const tokens = marked.lexer(markdown);

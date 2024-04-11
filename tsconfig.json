@@ -14,7 +14,7 @@
     "skipDefaultLibCheck": true,
     "baseUrl": ".",
     "paths": {
-      "@dp/source": ["src/index.ts"]
+      "@dp/source": ["src/main-interactive.ts"]
     }
   },
   "files": [],
