@@ -1,16 +1,14 @@
 import * as fs from 'fs';
-import * as parseArgs from 'minimist';
-import * as process from 'process';
-import {satisfies} from 'compare-versions';
+import { satisfies } from 'compare-versions';
 
-import {DependencyEntry, Parser} from './lib/parser';
-import {PeerDependencies, RegistryClient} from './lib/registry-client';
+import { DependencyEntry, Parser } from './lib/parser';
+import { PeerDependencies, RegistryClient } from './lib/registry-client';
 
 interface PackageFile {
-    dependencies: Record<string, string>;
-    devDependencies: Record<string, string>;
-    peerDependencies: Record<string, string>;
-    dependencyParser: Record<string, string>;
+  dependencies: Record<string, string>;
+  devDependencies: Record<string, string>;
+  peerDependencies: Record<string, string>;
+  dependencyParser: Record<string, string>;
 }
 
 interface Conflicts {
@@ -20,20 +18,19 @@ interface Conflicts {
     };
 }
 
-class DependencyParser {
+export class DependencyParser {
     private parser: Parser;
     private client: RegistryClient;
 
     private readonly filename: string;
 
-    constructor() {
-        const argv = parseArgs(process.argv.slice(2));
-        this.filename = argv.filename;
+    constructor(filename: string) {
+        this.filename = filename;
         this.parser = new Parser();
         this.client = new RegistryClient();
     }
 
-    public async run() {
+    public async run(): Promise<string> {
         if (!this.filename) {
             console.error('Please specify the path to a package.json file!');
             return;
@@ -67,8 +64,7 @@ class DependencyParser {
 
             const conflicts: Conflicts = this.getConflicts(installedPackageEntries, peerDependencies);
 
-            const humanReadableOutput = this.generateHumanReadableOutput(dependencyEntries, peerDependencies, conflicts, packageName, packageVersion);
-            console.log(humanReadableOutput);
+            return this.generateHumanReadableOutput(dependencyEntries, peerDependencies, conflicts, packageName, packageVersion);
         }
     }
 
@@ -109,5 +105,3 @@ class DependencyParser {
         return conflicts;
     }
 }
-
-new DependencyParser().run();
