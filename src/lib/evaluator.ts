@@ -2,9 +2,9 @@ import { compareVersions, satisfies } from 'compare-versions';
 import { PackageJson } from 'nx/src/utils/package-json';
 import * as fs from 'fs';
 import * as process from 'process';
-import {getAbbreviatedPackument, getPackageManifest, getPackument} from 'query-registry';
+import { getAbbreviatedPackument, getPackageManifest, getPackument, PackageManifest } from 'query-registry';
 import { ArgumentsCamelCase } from 'yargs';
-import { Peers, Result, Versions } from './evaluator.interface';
+import { PackageRequirement, Peers, ResolvedPackage, Result, Versions } from './evaluator.interface';
 
 const MAX_LEVEL = 100;
 
@@ -22,19 +22,82 @@ export class Evaluator {
 
     try {
       const file: PackageJson = JSON.parse(fs.readFileSync(path).toString());
-      const rootPeers: Record<string, string> = {
-        ...file.dependencies,
-        ...file.peerDependencies,
-      };
-      // TODO: sort root peers by impact/size (most important in last position)
-      const rootKeys = Object.keys(rootPeers).reverse();
-      await this.buildPeerDependencyTree(rootKeys);
-      console.debug(this.results.sort((a, b) => a.level - b.level));
+      const openRequirements: PackageRequirement[] = [
+        ...(file.dependencies
+          ? Object.keys(file.dependencies).map((name) => ({
+              name,
+              peer: false,
+            }))
+          : []),
+        ...(file.peerDependencies
+          ? Object.keys(file.peerDependencies).map((name) => ({
+              name,
+              peer: true,
+            }))
+          : []),
+      ];
+      const result = await this.evaluationStep([], [], openRequirements);
+      console.log(result);
     } catch (e) {
       console.error(e);
       console.error('Missing package.json file at current path');
       return;
     }
+  }
+
+  private async evaluationStep(
+    selectedPackageVersions: ResolvedPackage[],
+    closedRequirements: PackageRequirement[],
+    openRequirements: PackageRequirement[],
+  ): Promise<ResolvedPackage[]> {
+    if (openRequirements.length) {
+      const currentRequirement = openRequirements.pop();
+      const version = selectedPackageVersions.find((rp) => rp.name === currentRequirement.name)?.semVerInfo;
+      const availableVersions = version
+        ? [version]
+        : Object.keys((await getPackument({ name: currentRequirement.name })).versions).sort(compareVersions).reverse();
+      const compatibleVersions = currentRequirement.versionRequirement
+        ? availableVersions.filter((v) => satisfies(v, currentRequirement.versionRequirement))
+        : availableVersions;
+      for (const versionToExplore of compatibleVersions) {
+        const packageDetails = await getPackageManifest({ name: currentRequirement.name, version: versionToExplore });
+        selectedPackageVersions.push({ name: packageDetails.name, semVerInfo: packageDetails.version });
+        closedRequirements.push(currentRequirement);
+        return await this.evaluationStep(selectedPackageVersions, closedRequirements, this.addDependenciesToOpenSet(packageDetails, closedRequirements, openRequirements));
+      }
+    }
+    return selectedPackageVersions;
+  }
+
+  private addDependenciesToOpenSet(
+    packageDetails: PackageManifest,
+    closedRequirements: PackageRequirement[],
+    openRequirements: PackageRequirement[],
+  ): PackageRequirement[] {
+    const newRequirements: PackageRequirement[] = [
+      ...(packageDetails.dependencies
+        ? Object.keys(packageDetails.dependencies).map((name) => ({
+            name,
+            peer: false,
+          }))
+        : []),
+      ...(packageDetails.peerDependencies
+        ? Object.keys(packageDetails.peerDependencies).map((name) => ({
+            name,
+            peer: true,
+          }))
+        : []),
+    ];
+    for (const newRequirement of newRequirements) {
+      if (
+        !openRequirements.some((pr) => pr.name === newRequirement.name) &&
+        // TODO: if its already in closedRequirements -> backtracking
+        !closedRequirements.some((pr) => pr.name === newRequirement.name)
+      ) {
+        openRequirements.push(newRequirement);
+      }
+    }
+    return openRequirements;
   }
 
   private async buildPeerDependencyTree(names: string[]) {
@@ -47,16 +110,16 @@ export class Evaluator {
       await this.setVersions(name);
       do {
         version = this.versions[name].pop();
-        const manifest = await getPackageManifest({name, version});
+        const manifest = await getPackageManifest({ name, version });
         if (manifest.peerDependencies) {
           redo = !(await this.addToNextPeers(manifest.peerDependencies));
         }
       } while (redo);
-      this.results.push({name, version, level: level++});
+      this.results.push({ name, version, level: level });
     }
     while (Object.keys(this.nextPeers).length || level > MAX_LEVEL) {
-      await this.addPeersToResult(Object.assign({}, this.nextPeers), level);
       level++;
+      await this.addPeersToResult(Object.assign({}, this.nextPeers), level);
     }
   }
 
