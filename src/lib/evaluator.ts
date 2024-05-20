@@ -45,6 +45,7 @@ export class Evaluator {
     }
   }
 
+  // TODO: backtracking -> check different versions, return to previous evaluation steps, heuristics
   private async evaluationStep(
     selectedPackageVersions: ResolvedPackage[],
     closedRequirements: PackageRequirement[],
@@ -61,7 +62,9 @@ export class Evaluator {
         : availableVersions;
       for (const versionToExplore of compatibleVersions) {
         const packageDetails = await getPackageManifest({ name: currentRequirement.name, version: versionToExplore });
-        selectedPackageVersions.push({ name: packageDetails.name, semVerInfo: packageDetails.version });
+        if (currentRequirement.peer) {
+          selectedPackageVersions.push({name: packageDetails.name, semVerInfo: packageDetails.version});
+        }
         closedRequirements.push(currentRequirement);
         return await this.evaluationStep(selectedPackageVersions, closedRequirements, this.addDependenciesToOpenSet(packageDetails, closedRequirements, openRequirements));
       }
@@ -100,6 +103,11 @@ export class Evaluator {
     return openRequirements;
   }
 
+  /**
+   * @deprecated
+   * @param names
+   * @private
+   */
   private async buildPeerDependencyTree(names: string[]) {
     let level = 0;
 
@@ -123,6 +131,12 @@ export class Evaluator {
     }
   }
 
+  /**
+   * @deprecated
+   * @param peers
+   * @param level
+   * @private
+   */
   private async addPeersToResult(peers: Peers, level: number) {
     this.nextPeers = {};
     if (!peers || !Object.keys(peers).length) {
@@ -149,6 +163,11 @@ export class Evaluator {
     }
   }
 
+  /**
+   * @deprecated
+   * @param peers
+   * @private
+   */
   private async addToNextPeers(peers: Peers): Promise<boolean> {
     const nextPeers: Peers = {};
     for (const [name, version] of Object.entries(peers)) {
@@ -166,11 +185,24 @@ export class Evaluator {
     return true;
   }
 
+  /**
+   * @deprecated
+   * @param name
+   * @param range1
+   * @param range2
+   * @private
+   */
   private async getIntersection(name: string, range1: string, range2: string): Promise<string> {
     const versions = Object.keys((await getPackument({ name })).versions);
     return versions.filter((v) => satisfies(v, range1) && satisfies(v, range2)).join(' || ');
   }
 
+  /**
+   * @deprecated
+   * @param name
+   * @param range
+   * @private
+   */
   private async setVersions(name: string, range?: string) {
     if (this.versions[name]) {
       return;
