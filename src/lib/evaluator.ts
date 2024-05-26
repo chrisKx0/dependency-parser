@@ -5,7 +5,7 @@ import * as process from 'process';
 import { getAbbreviatedPackument, getPackageManifest, getPackument, PackageManifest } from 'query-registry';
 import { ArgumentsCamelCase } from 'yargs';
 import { PackageRequirement, Peers, ResolvedPackage, Result, Versions } from './evaluator.interface';
-import { union } from 'lodash';
+// import { union } from 'lodash';
 
 const MAX_LEVEL = 100;
 
@@ -47,6 +47,7 @@ export class Evaluator {
             }))
           : []),
       ];
+      // TODO: add direct dependencies to heuristic
       const result = await this.evaluationStep([], [], openRequirements);
       console.log(result);
     } catch (e) {
@@ -56,8 +57,6 @@ export class Evaluator {
     }
   }
 
-  // TODO: backtracking -> return to previous evaluation steps when conflict can't be satisfied
-  // TODO: heuristics
   private async evaluationStep(
     selectedPackageVersions: ResolvedPackage[],
     closedRequirements: PackageRequirement[],
@@ -65,48 +64,52 @@ export class Evaluator {
     // knownConflicts: ConflictState[],
   ): Promise<ConflictState> {
     if (openRequirements.length) {
-      const currentRequirement = openRequirements.pop();
+      const currentRequirement = openRequirements.shift();
       const version = selectedPackageVersions.find((rp) => rp.name === currentRequirement.name)?.semVerInfo;
-      // console.log(`${currentRequirement.name}: ${version}`);
-      const availableVersions = version
-        ? [version]
-        : Object.keys((await getPackument({ name: currentRequirement.name })).versions)
-            .sort(compareVersions)
-            .reverse();
+      try {
+        const availableVersions = version
+            ? [version]
+            : Object.keys((await getPackument({ name: currentRequirement.name })).versions)
+                .sort(compareVersions)
+                .reverse();
 
-      const compatibleVersions = currentRequirement.versionRequirement
-        ? availableVersions.filter((v) => satisfies(v, currentRequirement.versionRequirement))
-        : availableVersions;
+        // TODO: add version range -> heuristic
 
-      let conflictState: ConflictState = { result: openRequirements, state: State.CONFLICT };
+        const compatibleVersions = currentRequirement.versionRequirement
+          ? availableVersions.filter((v) => satisfies(v, currentRequirement.versionRequirement.replace('ˆ', '^')))
+          : availableVersions;
 
-      // const currentRequirementSet = union(openRequirements, closedRequirements);
-      // const isSuperset = knownConflicts.some((cs) => cs.result.every((rp) => currentRequirementSet.find((pr) => rp.name === pr.name)));
-      // console.log(isSuperset);
-      // if (isSuperset) {
-      //   return { state: State.CONFLICT };
-      // }
+        // TODO: check pinned versions heuristic
 
-      for (const versionToExplore of compatibleVersions) {
-        if (conflictState.state === State.CONFLICT) {
-          const packageDetails = await getPackageManifest({ name: currentRequirement.name, version: versionToExplore });
-          if (currentRequirement.peer && !selectedPackageVersions.some((rp) => rp.name === packageDetails.name)) {
-            selectedPackageVersions.push({ name: packageDetails.name, semVerInfo: packageDetails.version });
+        let conflictState: ConflictState = { result: openRequirements, state: State.CONFLICT };
+
+        // TODO: add to heuristics ?
+        // const currentRequirementSet = union(openRequirements, closedRequirements);
+        // const isSuperset = knownConflicts.some((cs) => cs.result.every((rp) => currentRequirementSet.find((pr) => rp.name === pr.name)));
+        // console.log(isSuperset);
+        // if (isSuperset) {
+        //   return { state: State.CONFLICT };
+        // }
+        for (const versionToExplore of compatibleVersions) {
+          if (conflictState.state === State.CONFLICT) {
+            const packageDetails = await getPackageManifest({ name: currentRequirement.name, version: versionToExplore });
+            console.debug(`${currentRequirement.name} --- ${versionToExplore}`);
+            conflictState = await this.evaluationStep(
+                currentRequirement.peer ? [...selectedPackageVersions,  { name: packageDetails.name, semVerInfo: packageDetails.version }] : selectedPackageVersions,
+              [...closedRequirements, currentRequirement],
+              this.addDependenciesToOpenSet(packageDetails, closedRequirements, openRequirements),
+              // this.addConflictToKnownConflicts(conflictState, knownConflicts),
+            );
           }
-          closedRequirements.push(currentRequirement);
-          conflictState = await this.evaluationStep(
-            selectedPackageVersions,
-            closedRequirements,
-            this.addDependenciesToOpenSet(packageDetails, closedRequirements, openRequirements),
-            // this.addConflictToKnownConflicts(conflictState, knownConflicts),
-          );
-        } else {
-          conflictState = { result: selectedPackageVersions, state: State.OK };
         }
+        // TODO: maybe bump conflict potential -> heuristic
+        return conflictState;
+      } catch (e) {
+        return { result: openRequirements, state: State.CONFLICT };
       }
-      return conflictState;
+    } else {
+      return {result: selectedPackageVersions, state: State.OK};
     }
-    return { result: selectedPackageVersions, state: State.OK };
   }
 
   private addConflictToKnownConflicts(conflictState: ConflictState, knownConflicts: ConflictState[]) {
@@ -119,6 +122,7 @@ export class Evaluator {
     closedRequirements: PackageRequirement[],
     openRequirements: PackageRequirement[],
   ): PackageRequirement[] {
+    const newOpenRequirements = [...openRequirements];
     const newRequirements: PackageRequirement[] = [
       ...(packageDetails.peerDependencies
         ? Object.entries(packageDetails.peerDependencies).map(([name, versionRequirement]) => ({
@@ -135,15 +139,16 @@ export class Evaluator {
           }))
         : []),
     ];
+    // TODO check heuristics: direct dependencies, conflict potential, version range (if already seen)
     for (const newRequirement of newRequirements) {
       if (
-        !openRequirements.some((pr) => pr.name === newRequirement.name && pr.versionRequirement === newRequirement.versionRequirement) &&
+        !newOpenRequirements.some((pr) => pr.name === newRequirement.name && pr.versionRequirement === newRequirement.versionRequirement) &&
         !closedRequirements.some((pr) => pr.name === newRequirement.name && pr.versionRequirement === newRequirement.versionRequirement)
       ) {
-        openRequirements.push(newRequirement);
+        newOpenRequirements.push(newRequirement);
       }
     }
-    return openRequirements;
+    return newOpenRequirements;
   }
 
   /**
@@ -256,5 +261,3 @@ export class Evaluator {
     this.versions[name] = range ? versions.filter((v) => satisfies(v, range)) : versions;
   }
 }
-
-// TODO: maybe need to replace ˆ with ^ in ranges
