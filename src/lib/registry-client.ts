@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import { getPackageManifest, getPackument } from 'query-registry';
-import {PackageDetails} from "./evaluator.interface";
+import { PackageDetails } from './evaluator.interface';
 
 // TODO: error handling
 
@@ -21,7 +21,7 @@ export class RegistryClient {
         version: manifest.version,
         dependencies: manifest.dependencies,
         peerDependencies: manifest.peerDependencies,
-      }
+      };
       this.details[key] = details;
     }
     return details;
