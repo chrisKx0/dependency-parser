@@ -18,7 +18,7 @@
         "outputPath": "dist/dp",
         "main": "./src/main-interactive.ts",
         "tsConfig": "./tsconfig.lib.json",
-        "assets": ["files/*"]
+        "assets": ["data/*"]
       }
     },
     "lint": {

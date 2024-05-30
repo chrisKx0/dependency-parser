@@ -1,20 +1,26 @@
-export interface Result {
-    name: string;
-    version: string;
-    level: number;
+export interface ConflictState {
+    result?: ResolvedPackage[] | PackageRequirement[];
+    state: State;
 }
 
-export type Versions = Record<string, string[]>;
-export type Peers = Record<string, string>;
+export interface PackageDetails {
+    name: string;
+    version: string;
+    dependencies?: Record<string, string>;
+    peerDependencies?: Record<string, string>;
+}
 
-// new interfaces
 export interface PackageRequirement {
     name: string;
     versionRequirement?: string;
     peer?: boolean;
 }
-
 export interface ResolvedPackage {
     name: string;
     semVerInfo: string;
+}
+
+export enum State {
+    OK = 'OK',
+    CONFLICT = 'CONFLICT',
 }
