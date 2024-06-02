@@ -38,16 +38,18 @@ export class Evaluator {
       // load cache from disk
       this.client.readDataFromFiles();
 
-      // add direct dependency & pinned versions heuristics
+      // add heuristics for direct dependencies & pinned versions
+      // TODO: ignored versions ?
       const pinnedVersions: Record<string, string> = {}; // TODO: get from user input + add type
-      openRequirements.forEach(
-        (pr) => (this.heuristics[pr.name] = { isDirectDependency: true, conflictPotential: 0, pinnedVersion: pinnedVersions[pr.name] }),
-      );
-      Object.entries(pinnedVersions).forEach(([name, pinnedVersion]) => {
-        if (!this.heuristics[name]) {
-          this.heuristics[name] = { conflictPotential: 0, pinnedVersion };
-        }
-      });
+      for (const { name } of openRequirements) {
+        await this.createHeuristics(name, pinnedVersions[name], true);
+      }
+      for (const [name, pinnedVersion] of Object.entries(pinnedVersions)) {
+        await this.createHeuristics(name, pinnedVersion);
+      }
+
+      // sort direct dependencies by heuristics
+      openRequirements.sort(this.sortByHeuristics);
 
       // evaluation
       const result = await this.evaluationStep([], [], openRequirements);
@@ -74,9 +76,6 @@ export class Evaluator {
       try {
         if (version) {
           availableVersions = [version];
-          if (!this.heuristics[currentRequirement.name].versionRange) {
-            this.heuristics[currentRequirement.name].versionRange = { type: 'minor', value: 0 };
-          }
         } else {
           const allVersions = (await this.client.getAllVersionsFromRegistry(currentRequirement.name)).sort(compareVersions).reverse();
           let allowedMajorVersions: number; // TODO: evaluate useful default & not only major versions (maybe) & get from user input
@@ -84,17 +83,10 @@ export class Evaluator {
 
           availableVersions =
             allVersions.length && allowedMajorVersions
-              ? allVersions.filter((v) => compareVersions(v, (major(allVersions[0]) - allowedMajorVersions).toString()) !== -1)
+              ? allVersions.filter((v) => compareVersions(v, Math.max(major(allVersions[0]) - allowedMajorVersions, 0).toString()) !== -1)
               : allVersions;
           if (validRange(pinnedVersion)) {
             availableVersions = availableVersions.filter((v) => satisfies(v, pinnedVersion));
-          }
-
-          if (!this.heuristics[currentRequirement.name].versionRange) {
-            this.heuristics[currentRequirement.name].versionRange = this.getRangeBetweenVersions(
-              allVersions[0],
-              allVersions[allVersions.length - 1],
-            );
           }
         }
 
@@ -107,14 +99,13 @@ export class Evaluator {
         for (const versionToExplore of compatibleVersions) {
           if (conflictState.state === State.CONFLICT) {
             const packageDetails = await this.client.getPackageDetails(currentRequirement.name, versionToExplore);
-            // console.debug(`${currentRequirement.name} - ${versionToExplore}`);
             conflictState = await this.evaluationStep(
               currentRequirement.peer &&
                 !selectedPackageVersions.some((rp) => rp.name === packageDetails.name && rp.semVerInfo === packageDetails.version)
                 ? [...selectedPackageVersions, { name: packageDetails.name, semVerInfo: packageDetails.version }]
                 : selectedPackageVersions,
               [...closedRequirements, currentRequirement],
-              this.addDependenciesToOpenSet(packageDetails, closedRequirements, openRequirements),
+              await this.addDependenciesToOpenSet(packageDetails, closedRequirements, openRequirements),
             );
           }
         }
@@ -123,6 +114,7 @@ export class Evaluator {
         }
         return conflictState;
       } catch (e) {
+        console.error(e);
         return { state: State.CONFLICT };
       }
     } else {
@@ -130,11 +122,11 @@ export class Evaluator {
     }
   }
 
-  private addDependenciesToOpenSet(
+  private async addDependenciesToOpenSet(
     packageDetails: PackageDetails,
     closedRequirements: PackageRequirement[],
     openRequirements: PackageRequirement[],
-  ): PackageRequirement[] {
+  ): Promise<PackageRequirement[]> {
     const newOpenRequirements = [...openRequirements];
     const newRequirements: PackageRequirement[] = [
       ...(packageDetails.peerDependencies
@@ -152,36 +144,81 @@ export class Evaluator {
           }))
         : []),
     ];
-    // TODO check heuristics: direct dependencies, conflict potential, version range (if already seen)
+
+    // add requirements to open requirements if needed & create heuristics if none exist
     for (const newRequirement of newRequirements) {
       if (
         !newOpenRequirements.some((pr) => pr.name === newRequirement.name && pr.versionRequirement === newRequirement.versionRequirement) &&
         !closedRequirements.some((pr) => pr.name === newRequirement.name && pr.versionRequirement === newRequirement.versionRequirement)
       ) {
         newOpenRequirements.push(newRequirement);
-        if (!this.heuristics[newRequirement.name]) {
-          this.heuristics[newRequirement.name] = { conflictPotential: 0 };
-        }
+        await this.createHeuristics(newRequirement.name, newRequirement.versionRequirement);
       }
     }
+
+    // sort new dependencies by heuristics
+    newOpenRequirements.sort(this.sortByHeuristics);
+
     return newOpenRequirements;
   }
+
+  private async createHeuristics(name: string, pinnedVersion?: string, isDirectDependency = false) {
+    if (!this.heuristics[name]) {
+      const allVersions = (await this.client.getAllVersionsFromRegistry(name)).sort(compareVersions).reverse();
+      this.heuristics[name] = {
+        conflictPotential: 0,
+        isDirectDependency,
+        pinnedVersion,
+        versionRange: this.getRangeBetweenVersions(allVersions[0], allVersions[allVersions.length - 1]),
+      };
+    }
+  }
+
+  private sortByHeuristics = (pr1: PackageRequirement, pr2: PackageRequirement): number => {
+    const heuristics1 = this.heuristics[pr1.name]; // negative value prioritizes pr1
+    const heuristics2 = this.heuristics[pr2.name]; // positive value prioritizes pr2
+
+    // direct dependencies
+    if (heuristics1.isDirectDependency && !heuristics2.isDirectDependency) {
+      return 1;
+    } else if (!heuristics1.isDirectDependency && heuristics2.isDirectDependency) {
+      return -1;
+    }
+
+    // conflict potential
+    if (heuristics1.conflictPotential > heuristics2.conflictPotential) {
+      return 1;
+    } else if (heuristics1.conflictPotential < heuristics2.conflictPotential) {
+      return -1;
+    }
+
+    // version range
+    if (heuristics1.versionRange.type === heuristics2.versionRange.type) {
+      return heuristics1.versionRange.value - heuristics2.versionRange.value;
+    } else {
+      if (heuristics1.versionRange.type.endsWith('major') || heuristics2.versionRange.type.endsWith('patch')) {
+        return 1;
+      }
+      return -1;
+    }
+  };
 
   private getRangeBetweenVersions(v1: string, v2: string): VersionRange {
     let type = diff(v1, v2);
     let value: number;
     switch (type) {
       case 'major':
+      case 'premajor':
         value = major(v1) - major(v2);
+        type = 'major';
         break;
       case 'minor':
+      case 'preminor':
         value = minor(v1) - minor(v2);
-        break;
-      case 'patch':
-        value = patch(v1) - patch(v2);
+        type = 'minor';
         break;
       default:
-        value = 0;
+        value = patch(v1) - patch(v2);
         type = 'patch';
         break;
     }

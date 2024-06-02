@@ -8,8 +8,8 @@ export interface ConflictState {
 export interface Heuristics {
   conflictPotential: number;
   isDirectDependency?: boolean;
-  versionRange?: VersionRange;
   pinnedVersion?: string;
+  versionRange: VersionRange;
 }
 
 export interface PackageDetails {

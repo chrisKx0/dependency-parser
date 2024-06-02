@@ -38,6 +38,7 @@ export class RegistryClient {
   }
 
   public readDataFromFiles() {
+    // TODO: force regeneration after time
     if (fs.existsSync(this.path + '/details')) {
       const details = fs.readFileSync(this.path + '/details').toString();
       this.details = JSON.parse(details);

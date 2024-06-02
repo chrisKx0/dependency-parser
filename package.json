@@ -46,9 +46,9 @@
     "vitest": "~0.34.6"
   },
   "type": "commonjs",
-  "main": "./src/main-interactive.ts",
-  "typings": "./src/main-interactive.d.ts",
+  "main": "./src/main.ts",
+  "typings": "./src/main.d.ts",
   "bin": {
-    "dp": "./dist/dp/src/main-interactive.js"
+    "dp": "./dist/dp/src/main.js"
   }
 }

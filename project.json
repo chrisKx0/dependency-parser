@@ -16,7 +16,7 @@
       "outputs": ["{options.outputPath}"],
       "options": {
         "outputPath": "dist/dp",
-        "main": "./src/main-interactive.ts",
+        "main": "./src/main.ts",
         "tsConfig": "./tsconfig.lib.json",
         "assets": ["data/*"]
       }
