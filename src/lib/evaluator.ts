@@ -7,6 +7,8 @@ import { ConflictState, Heuristics, PackageDetails, PackageRequirement, Resolved
 import { RegistryClient } from './registry-client';
 import { diff, major, minor, patch, validRange } from 'semver';
 
+const PACKAGE_BUNDLES = ['@angular', '@nx'];
+
 export class Evaluator {
   private readonly client = new RegistryClient();
   private readonly heuristics: Record<string, Heuristics> = {};
@@ -73,7 +75,11 @@ export class Evaluator {
   ): Promise<ConflictState> {
     if (openRequirements.length) {
       const currentRequirement = openRequirements.shift();
-      const version = selectedPackageVersions.find((rp) => rp.name === currentRequirement.name)?.semVerInfo;
+      const version = selectedPackageVersions.find(
+        (rp) =>
+          rp.name === currentRequirement.name ||
+          PACKAGE_BUNDLES.some((pb) => rp.name.startsWith(pb) && currentRequirement.name.startsWith(pb)), // bundled packages need to be of the same version
+      )?.semVerInfo;
       let availableVersions: string[];
       try {
         if (version) {
@@ -104,7 +110,7 @@ export class Evaluator {
             const packageDetails = await this.client.getPackageDetails(currentRequirement.name, versionToExplore);
             if (packageDetails.peerDependencies) {
               this.heuristics[currentRequirement.name].peers = Object.keys(packageDetails.peerDependencies).filter((peer) =>
-                  this.directDependencies.includes(peer),
+                this.directDependencies.includes(peer),
               );
             }
             conflictState = await this.evaluationStep(
