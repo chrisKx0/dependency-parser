@@ -8,7 +8,9 @@ import { RegistryClient } from './registry-client';
 import { diff, major, minor, patch, validRange } from 'semver';
 
 export class Evaluator {
-  constructor(private readonly client = new RegistryClient(), private readonly heuristics: Record<string, Heuristics> = {}) {}
+  private readonly client = new RegistryClient();
+  private readonly heuristics: Record<string, Heuristics> = {};
+  private directDependencies: string[] = [];
 
   public async evaluate(args: ArgumentsCamelCase) {
     // get package.json path from args or current working directory & add filename if necessary
@@ -19,28 +21,29 @@ export class Evaluator {
 
     try {
       // read package.json to retrieve dependencies and peer dependencies
-      const file: PackageJson = JSON.parse(fs.readFileSync(path).toString());
+      const packageJson: PackageJson = JSON.parse(fs.readFileSync(path).toString());
       const openRequirements: PackageRequirement[] = [
-        ...(file.peerDependencies
-          ? Object.keys(file.peerDependencies).map((name) => ({
+        ...(packageJson.peerDependencies
+          ? Object.keys(packageJson.peerDependencies).map((name) => ({
               name,
               peer: true,
             }))
           : []),
-        ...(file.dependencies
-          ? Object.keys(file.dependencies).map((name) => ({
+        ...(packageJson.dependencies
+          ? Object.keys(packageJson.dependencies).map((name) => ({
               name,
               peer: false,
             }))
           : []),
       ];
+      this.directDependencies = openRequirements.map((pr) => pr.name);
 
       // load cache from disk
       this.client.readDataFromFiles();
 
       // add heuristics for direct dependencies & pinned versions
-      // TODO: ignored versions ?
-      const pinnedVersions: Record<string, string> = {}; // TODO: get from user input + add type
+      // TODO: pinned versions + ranges from dp install call (params or package.json)
+      const pinnedVersions: Record<string, string> = {};
       for (const { name } of openRequirements) {
         await this.createHeuristics(name, pinnedVersions[name], true);
       }
@@ -60,7 +63,6 @@ export class Evaluator {
     } catch (e) {
       console.error(e);
       console.error('Missing package.json file at current path');
-      return;
     }
   }
 
@@ -77,14 +79,15 @@ export class Evaluator {
         if (version) {
           availableVersions = [version];
         } else {
-          const allVersions = (await this.client.getAllVersionsFromRegistry(currentRequirement.name)).sort(compareVersions).reverse();
-          let allowedMajorVersions: number; // TODO: evaluate useful default & not only major versions (maybe) & get from user input
+          const allVersions = (await this.client.getAllVersionsFromRegistry(currentRequirement.name)).versions
+            .sort(compareVersions)
+            .reverse();
+          const allowedMajorVersions = 2; // TODO: edit default via optional user input
           const pinnedVersion = this.heuristics[currentRequirement.name].pinnedVersion;
 
-          availableVersions =
-            allVersions.length && allowedMajorVersions
-              ? allVersions.filter((v) => compareVersions(v, Math.max(major(allVersions[0]) - allowedMajorVersions, 0).toString()) !== -1)
-              : allVersions;
+          availableVersions = allVersions.length
+            ? allVersions.filter((v) => compareVersions(v, Math.max(major(allVersions[0]) - allowedMajorVersions, 0).toString()) !== -1)
+            : allVersions;
           if (validRange(pinnedVersion)) {
             availableVersions = availableVersions.filter((v) => satisfies(v, pinnedVersion));
           }
@@ -99,6 +102,11 @@ export class Evaluator {
         for (const versionToExplore of compatibleVersions) {
           if (conflictState.state === State.CONFLICT) {
             const packageDetails = await this.client.getPackageDetails(currentRequirement.name, versionToExplore);
+            if (packageDetails.peerDependencies) {
+              this.heuristics[currentRequirement.name].peers = Object.keys(packageDetails.peerDependencies).filter((peer) =>
+                  this.directDependencies.includes(peer),
+              );
+            }
             conflictState = await this.evaluationStep(
               currentRequirement.peer &&
                 !selectedPackageVersions.some((rp) => rp.name === packageDetails.name && rp.semVerInfo === packageDetails.version)
@@ -164,12 +172,14 @@ export class Evaluator {
 
   private async createHeuristics(name: string, pinnedVersion?: string, isDirectDependency = false) {
     if (!this.heuristics[name]) {
-      const allVersions = (await this.client.getAllVersionsFromRegistry(name)).sort(compareVersions).reverse();
+      const { versions, meanSize } = await this.client.getAllVersionsFromRegistry(name);
+      versions.sort(compareVersions).reverse();
       this.heuristics[name] = {
         conflictPotential: 0,
         isDirectDependency,
+        meanSize,
         pinnedVersion,
-        versionRange: this.getRangeBetweenVersions(allVersions[0], allVersions[allVersions.length - 1]),
+        versionRange: this.getRangeBetweenVersions(versions[0], versions[versions.length - 1]),
       };
     }
   }
@@ -179,10 +189,19 @@ export class Evaluator {
     const heuristics2 = this.heuristics[pr2.name]; // positive value prioritizes pr2
 
     // direct dependencies
-    if (heuristics1.isDirectDependency && !heuristics2.isDirectDependency) {
-      return 1;
-    } else if (!heuristics1.isDirectDependency && heuristics2.isDirectDependency) {
-      return -1;
+    if (heuristics1.isDirectDependency || heuristics2.isDirectDependency) {
+      if (!heuristics2.isDirectDependency) {
+        return 1;
+      } else if (!heuristics1.isDirectDependency) {
+        return -1;
+      }
+      const hasPeer1 = heuristics1.peers?.includes(pr2.name);
+      const hasPeer2 = heuristics2.peers?.includes(pr1.name);
+      if (!hasPeer1 && hasPeer2) {
+        return 1;
+      } else if (hasPeer1 && !hasPeer2) {
+        return -1;
+      }
     }
 
     // conflict potential
@@ -194,6 +213,10 @@ export class Evaluator {
 
     // version range
     if (heuristics1.versionRange.type === heuristics2.versionRange.type) {
+      if (heuristics1.versionRange.value === heuristics1.versionRange.value) {
+        // size
+        return heuristics1.meanSize - heuristics2.meanSize;
+      }
       return heuristics1.versionRange.value - heuristics2.versionRange.value;
     } else {
       if (heuristics1.versionRange.type.endsWith('major') || heuristics2.versionRange.type.endsWith('patch')) {

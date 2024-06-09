@@ -8,6 +8,8 @@ export interface ConflictState {
 export interface Heuristics {
   conflictPotential: number;
   isDirectDependency?: boolean;
+  meanSize?: number;
+  peers?: string[];
   pinnedVersion?: string;
   versionRange: VersionRange;
 }
@@ -24,6 +26,7 @@ export interface PackageRequirement {
   versionRequirement?: string;
   peer?: boolean;
 }
+
 export interface ResolvedPackage {
   name: string;
   semVerInfo: string;
@@ -32,6 +35,11 @@ export interface ResolvedPackage {
 export enum State {
   OK = 'OK',
   CONFLICT = 'CONFLICT',
+}
+
+export interface Versions {
+  versions: string[];
+  meanSize: number;
 }
 
 export interface VersionRange {
