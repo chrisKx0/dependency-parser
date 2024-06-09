@@ -7,6 +7,8 @@ import { ConflictState, Heuristics, PackageDetails, PackageRequirement, Resolved
 import { RegistryClient } from './registry-client';
 import { diff, major, minor, patch, validRange } from 'semver';
 
+// TODO: Possible Error: Invalid argument not valid semver ('*' received)
+
 const PACKAGE_BUNDLES = ['@angular', '@nx'];
 
 export class Evaluator {
@@ -44,13 +46,26 @@ export class Evaluator {
       this.client.readDataFromFiles();
 
       // add heuristics for direct dependencies & pinned versions
-      // TODO: pinned versions + ranges from dp install call (params or package.json)
-      const pinnedVersions: Record<string, string> = {};
+      const pinnedVersions: Record<string, string> = await this.getPinnedVersions(args._, {
+        ...packageJson.dependencies,
+        ...packageJson.peerDependencies,
+      });
       for (const { name } of openRequirements) {
         await this.createHeuristics(name, pinnedVersions[name], true);
       }
       for (const [name, pinnedVersion] of Object.entries(pinnedVersions)) {
         await this.createHeuristics(name, pinnedVersion);
+        // add missing pinned versions to open requirements --> packages the user explicitly installs
+        const openRequirement = openRequirements.find((pr) => pr.name === name);
+        if (openRequirement) {
+          openRequirement.versionRequirement = pinnedVersion;
+        } else {
+          openRequirements.push({ name, peer: false, versionRequirement: pinnedVersion });
+        }
+        // edit bundled packages to also be of the same version
+        openRequirements
+          .filter((pr) => PACKAGE_BUNDLES.some((pb) => pr.name.startsWith(pb) && name.startsWith(pb)))
+          .forEach((pr) => (pr.versionRequirement = pinnedVersion));
       }
 
       // sort direct dependencies by heuristics
@@ -75,11 +90,13 @@ export class Evaluator {
   ): Promise<ConflictState> {
     if (openRequirements.length) {
       const currentRequirement = openRequirements.shift();
-      const version = selectedPackageVersions.find(
-        (rp) =>
-          rp.name === currentRequirement.name ||
-          PACKAGE_BUNDLES.some((pb) => rp.name.startsWith(pb) && currentRequirement.name.startsWith(pb)), // bundled packages need to be of the same version
-      )?.semVerInfo;
+      let version = selectedPackageVersions.find((rp) => rp.name === currentRequirement.name)?.semVerInfo;
+      if (!version) {
+        // bundled packages need to be of the same version
+        version = selectedPackageVersions.find((rp) =>
+          PACKAGE_BUNDLES.some((pb) => rp.name.startsWith(pb) && currentRequirement.name.startsWith(pb)),
+        )?.semVerInfo;
+      }
       let availableVersions: string[];
       try {
         if (version) {
@@ -252,5 +269,35 @@ export class Evaluator {
         break;
     }
     return { type, value: Math.abs(value) };
+  }
+
+  private async getPinnedVersions(params: (string | number)[], dependencies: Record<string, string>): Promise<Record<string, string>> {
+    const pinnedVersions = {};
+    const command = params.shift();
+    if (command !== 'i' && command !== 'install') {
+      return {};
+    }
+
+    if (params.length) {
+      // get versions from params
+      for (const param of params) {
+        if (typeof param === 'number') {
+          continue;
+        }
+        const paramSplit = param.split(/(?<!^)@/);
+        const name = paramSplit.shift();
+        if (!paramSplit.length) {
+          const versions = (await this.client.getAllVersionsFromRegistry(name)).versions.sort(compareVersions).reverse();
+          pinnedVersions[name] = versions[0];
+        } else {
+          pinnedVersions[name] = paramSplit.shift();
+        }
+      }
+    } else {
+      // get versions from dependencies
+      Object.entries(dependencies).forEach(([name, version]) => (pinnedVersions[name] = version));
+    }
+
+    return pinnedVersions;
   }
 }

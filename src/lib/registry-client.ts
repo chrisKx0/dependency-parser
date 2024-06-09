@@ -4,6 +4,7 @@ import { PackageDetails, Versions } from './evaluator.interface';
 import { sum } from 'lodash';
 
 // TODO: error handling
+
 const DETAILS_FILENAME = 'details.json';
 const VERSIONS_FILENAME = 'versions.json';
 
