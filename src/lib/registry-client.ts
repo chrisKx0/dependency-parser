@@ -1,9 +1,7 @@
-import * as fs from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { getPackageManifest, getPackument } from 'query-registry';
 import { PackageDetails, Versions } from './evaluator.interface';
 import { sum } from 'lodash';
-
-// TODO: error handling
 
 const DETAILS_FILENAME = 'details.json';
 const VERSIONS_FILENAME = 'versions.json';
@@ -51,22 +49,23 @@ export class RegistryClient {
 
   public readDataFromFiles() {
     // TODO: force regeneration after time
-    if (fs.existsSync(`${this.path}/${DETAILS_FILENAME}`)) {
-      const details = fs.readFileSync(`${this.path}/${DETAILS_FILENAME}`).toString();
+    // TODO: try catch instead of if checks
+    if (existsSync(`${this.path}/${DETAILS_FILENAME}`)) {
+      const details = readFileSync(`${this.path}/${DETAILS_FILENAME}`, { encoding: 'utf8' });
       this.details = JSON.parse(details);
     }
-    if (fs.existsSync(`${this.path}/${VERSIONS_FILENAME}`)) {
-      const versions = fs.readFileSync(`${this.path}/${VERSIONS_FILENAME}`).toString();
+    if (existsSync(`${this.path}/${VERSIONS_FILENAME}`)) {
+      const versions = readFileSync(`${this.path}/${VERSIONS_FILENAME}`, { encoding: 'utf8' });
       this.versions = JSON.parse(versions);
     }
   }
 
   public writeDataToFiles() {
-    if (!fs.existsSync(this.path)) {
-      fs.mkdirSync(this.path);
+    if (!existsSync(this.path)) {
+      mkdirSync(this.path);
     }
-    fs.writeFileSync(`${this.path}/${DETAILS_FILENAME}`, JSON.stringify(this.details));
-    fs.writeFileSync(`${this.path}/${VERSIONS_FILENAME}`, JSON.stringify(this.versions));
+    writeFileSync(`${this.path}/${DETAILS_FILENAME}`, JSON.stringify(this.details), { encoding: 'utf8' });
+    writeFileSync(`${this.path}/${VERSIONS_FILENAME}`, JSON.stringify(this.versions), { encoding: 'utf8' });
   }
 
   private calculateMeanSize(sizes: number[]): number {

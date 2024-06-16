@@ -8,6 +8,8 @@ import { RegistryClient } from './registry-client';
 import { diff, major, minor, patch, validRange } from 'semver';
 
 // TODO: Possible Error: Invalid argument not valid semver ('*' received)
+// TODO: include pinned versions of all direct dependencies to result
+// TODO: improve heuristics -> current order with all the newly added versions is super slow
 
 const PACKAGE_BUNDLES = ['@angular', '@nx'];
 
@@ -16,71 +18,63 @@ export class Evaluator {
   private readonly heuristics: Record<string, Heuristics> = {};
   private directDependencies: string[] = [];
 
-  public async evaluate(args: ArgumentsCamelCase) {
+  public async evaluate(args: ArgumentsCamelCase): Promise<ConflictState> {
     // get package.json path from args or current working directory & add filename if necessary
-    let path = (args.path as string) ?? process.cwd();
-    if (!/[/\\]package\.json$/.test(path)) {
-      path += '/package.json';
+    const path = ((args.path as string) ?? process.cwd()) + '/package.json';
+
+    // read package.json to retrieve dependencies and peer dependencies
+    const packageJson: PackageJson = JSON.parse(fs.readFileSync(path, { encoding: 'utf8' }));
+    const openRequirements: PackageRequirement[] = [
+      ...(packageJson.peerDependencies
+        ? Object.keys(packageJson.peerDependencies).map((name) => ({
+            name,
+            peer: true,
+          }))
+        : []),
+      ...(packageJson.dependencies
+        ? Object.keys(packageJson.dependencies).map((name) => ({
+            name,
+            peer: false,
+          }))
+        : []),
+    ];
+    this.directDependencies = openRequirements.map((pr) => pr.name);
+
+    // load cache from disk
+    this.client.readDataFromFiles();
+
+    // add heuristics for direct dependencies & pinned versions
+    const pinnedVersions: Record<string, string> = await this.getPinnedVersions(args._, {
+      ...packageJson.dependencies,
+      ...packageJson.peerDependencies,
+    });
+    for (const { name } of openRequirements) {
+      await this.createHeuristics(name, pinnedVersions[name], true);
+    }
+    for (const [name, pinnedVersion] of Object.entries(pinnedVersions)) {
+      await this.createHeuristics(name, pinnedVersion);
+      // add missing pinned versions to open requirements --> packages the user explicitly installs
+      const openRequirement = openRequirements.find((pr) => pr.name === name);
+      if (openRequirement) {
+        openRequirement.versionRequirement = pinnedVersion;
+      } else {
+        openRequirements.push({ name, peer: false, versionRequirement: pinnedVersion });
+      }
+      // edit bundled packages to also be of the same version
+      openRequirements
+        .filter((pr) => PACKAGE_BUNDLES.some((pb) => pr.name.startsWith(pb) && name.startsWith(pb)))
+        .forEach((pr) => (pr.versionRequirement = pinnedVersion));
     }
 
-    try {
-      // read package.json to retrieve dependencies and peer dependencies
-      const packageJson: PackageJson = JSON.parse(fs.readFileSync(path).toString());
-      const openRequirements: PackageRequirement[] = [
-        ...(packageJson.peerDependencies
-          ? Object.keys(packageJson.peerDependencies).map((name) => ({
-              name,
-              peer: true,
-            }))
-          : []),
-        ...(packageJson.dependencies
-          ? Object.keys(packageJson.dependencies).map((name) => ({
-              name,
-              peer: false,
-            }))
-          : []),
-      ];
-      this.directDependencies = openRequirements.map((pr) => pr.name);
+    // sort direct dependencies by heuristics
+    openRequirements.sort(this.sortByHeuristics);
 
-      // load cache from disk
-      this.client.readDataFromFiles();
+    // evaluation
+    const result = await this.evaluationStep([], [], openRequirements);
 
-      // add heuristics for direct dependencies & pinned versions
-      const pinnedVersions: Record<string, string> = await this.getPinnedVersions(args._, {
-        ...packageJson.dependencies,
-        ...packageJson.peerDependencies,
-      });
-      for (const { name } of openRequirements) {
-        await this.createHeuristics(name, pinnedVersions[name], true);
-      }
-      for (const [name, pinnedVersion] of Object.entries(pinnedVersions)) {
-        await this.createHeuristics(name, pinnedVersion);
-        // add missing pinned versions to open requirements --> packages the user explicitly installs
-        const openRequirement = openRequirements.find((pr) => pr.name === name);
-        if (openRequirement) {
-          openRequirement.versionRequirement = pinnedVersion;
-        } else {
-          openRequirements.push({ name, peer: false, versionRequirement: pinnedVersion });
-        }
-        // edit bundled packages to also be of the same version
-        openRequirements
-          .filter((pr) => PACKAGE_BUNDLES.some((pb) => pr.name.startsWith(pb) && name.startsWith(pb)))
-          .forEach((pr) => (pr.versionRequirement = pinnedVersion));
-      }
-
-      // sort direct dependencies by heuristics
-      openRequirements.sort(this.sortByHeuristics);
-
-      // evaluation
-      const result = await this.evaluationStep([], [], openRequirements);
-
-      // save cache to disk
-      this.client.writeDataToFiles();
-      console.log(result);
-    } catch (e) {
-      console.error(e);
-      console.error('Missing package.json file at current path');
-    }
+    // save cache to disk
+    this.client.writeDataToFiles();
+    return result;
   }
 
   private async evaluationStep(
