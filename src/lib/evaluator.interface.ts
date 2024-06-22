@@ -14,6 +14,9 @@ export interface Heuristics {
   versionRange: VersionRange;
 }
 
+// array positions must be kept
+export const PACKAGE_BUNDLES = ['@nx', '@angular'];
+
 export interface PackageDetails {
   name: string;
   version: string;

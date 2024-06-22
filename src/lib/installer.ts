@@ -3,11 +3,10 @@ import { PackageManager } from 'nx/src/utils/package-manager';
 import { NxJsonConfiguration } from 'nx/src/config/nx-json';
 import { lockFileExists } from 'nx/src/plugins/js/lock-file/lock-file';
 
-import { ResolvedPackage } from './evaluator.interface';
+import { PACKAGE_BUNDLES, ResolvedPackage } from './evaluator.interface';
 import { PackageJson } from 'nx/src/utils/package-json';
 import { execSync } from 'child_process';
-
-// TODO: find out which PM and MT are installed to limit installation
+import { validate } from 'compare-versions';
 
 export class Installer {
   public install(resolvedPackages: ResolvedPackage[], path?: string, packageManager?: PackageManager[]) {
@@ -19,10 +18,51 @@ export class Installer {
       packageManager = this.getPackageManager(packageJsonPath, nxPath);
     }
 
+    if (!packageManager.length) {
+      console.warn('No package manager found! Make sure at least one package manager is installed and added to path.');
+      return;
+    }
+
+    const nxVersion = resolvedPackages.find((rp) => rp.name.startsWith(PACKAGE_BUNDLES[0]))?.semVerInfo;
+    const ngPackages = resolvedPackages.filter((rp) => rp.name.startsWith(PACKAGE_BUNDLES[1]));
+
     // TODO: user decision if more than 1 package manager eligible
-    const pm = packageManager[0];
-    console.log(`Running ${pm} install command...`);
-    execSync(`${pm} install`, { encoding: 'utf8', cwd: path });
+    this.installPackages(packageManager[0], path, nxVersion, ngPackages);
+  }
+
+  private installPackages(packageManager: string, path: string, nxVersion?: string, ngPackages?: ResolvedPackage[]) {
+    // nx migrate
+    if (nxVersion && this.isToolInstalled('nx')) {
+      try {
+        execSync(`nx migrate ${nxVersion}`, {encoding: 'utf8'});
+        // TODO: user decision if migrations should be run
+        // execSync(`nx migrate --run-migrations=migrations.json`, { encoding: 'utf8' });
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    // ng update
+    if (ngPackages?.length && this.isToolInstalled('ng')) {
+      const params = ngPackages.map((rp) => `${rp.name}@${rp.semVerInfo}`).join(' ');
+      try {
+        execSync(`ng update ${params}`, {encoding: 'utf8'});
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    // installation
+    console.log(`Running ${packageManager} install command...`);
+    try {
+      execSync(`${packageManager} install`, { encoding: 'utf8', cwd: path });
+    } catch (e) {
+      if (packageManager === 'npm') {
+        console.error(e);
+      } else {
+        console.warn(`Package installation failed with ${packageManager}. Retrying with npm...`);
+        this.installPackages('npm', path);
+      }
+    }
   }
 
   private getPackageManager(packageJsonPath: string, nxPath: string): PackageManager[] {
@@ -31,7 +71,7 @@ export class Installer {
       const packageJson: PackageJson & { packageManager?: string } = JSON.parse(readFileSync(packageJsonPath, { encoding: 'utf8' }));
       if (packageJson?.packageManager) {
         const pm = packageJson.packageManager.split('@')[0];
-        if (pm === 'yarn' || pm === 'pnpm' || pm === 'npm') {
+        if (pm === 'yarn' || pm === 'pnpm' || (pm === 'npm' && this.isToolInstalled(pm))) {
           return [pm];
         }
       }
@@ -42,7 +82,7 @@ export class Installer {
     // via nx configuration
     try {
       const nxConfig: NxJsonConfiguration = JSON.parse(readFileSync(nxPath, { encoding: 'utf8' }));
-      if (nxConfig?.cli?.packageManager) {
+      if (nxConfig?.cli?.packageManager && this.isToolInstalled(nxConfig.cli.packageManager)) {
         return [nxConfig.cli.packageManager];
       }
     } catch (e) {
@@ -52,11 +92,11 @@ export class Installer {
     // via lockfiles
     const packageManager: PackageManager[] = [];
     // pnpm-lock.yaml
-    if (lockFileExists('pnpm')) {
+    if (lockFileExists('pnpm') && this.isToolInstalled('pnpm')) {
       packageManager.push('pnpm');
     }
     // yarn.lock
-    if (lockFileExists('yarn')) {
+    if (lockFileExists('yarn') && this.isToolInstalled('yarn')) {
       packageManager.push('yarn');
     }
     // package-lock.json
@@ -65,6 +105,24 @@ export class Installer {
     }
 
     return packageManager;
+  }
+
+  private isToolInstalled(tool: PackageManager | 'ng' | 'nx') {
+    try {
+      let version: string;
+      if (tool === 'nx' || tool === 'ng') {
+        const output = execSync(`${tool} --version`, { encoding: 'utf8' });
+        // TODO: make independent of nx / ng versions --> possible change in layout
+        const versionText = tool === 'nx' ? '- Global: v' : 'Angular CLI: ';
+        version = output.slice(output.indexOf(versionText) + versionText.length);
+        version = version.slice(0, version.indexOf('\n'));
+      } else {
+        version = execSync(`${tool} -v`, {encoding: 'utf8'});
+      }
+      return validate(version);
+    } catch (e) {
+      return false;
+    }
   }
 
   private updatePackageJson(resolvedPackages: ResolvedPackage[], path: string) {

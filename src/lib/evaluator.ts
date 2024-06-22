@@ -3,20 +3,27 @@ import { PackageJson } from 'nx/src/utils/package-json';
 import * as fs from 'fs';
 import * as process from 'process';
 import { ArgumentsCamelCase } from 'yargs';
-import { ConflictState, Heuristics, PackageDetails, PackageRequirement, ResolvedPackage, State, VersionRange } from './evaluator.interface';
+import {
+  ConflictState,
+  Heuristics,
+  PACKAGE_BUNDLES,
+  PackageDetails,
+  PackageRequirement,
+  ResolvedPackage,
+  State,
+  VersionRange,
+} from './evaluator.interface';
 import { RegistryClient } from './registry-client';
 import { diff, major, minor, patch, validRange } from 'semver';
 
 // TODO: Possible Error: Invalid argument not valid semver ('*' received)
-// TODO: include pinned versions of all direct dependencies to result
-// TODO: improve heuristics -> current order with all the newly added versions is super slow
-
-const PACKAGE_BUNDLES = ['@angular', '@nx'];
+// TODO: include pinned versions of all direct dependencies to result, not only the resolved ones --> why?
 
 export class Evaluator {
   private readonly client = new RegistryClient();
   private readonly heuristics: Record<string, Heuristics> = {};
   private directDependencies: string[] = [];
+  private allowedMajorVersions = 2; // TODO: edit default via optional user input
 
   public async evaluate(args: ArgumentsCamelCase): Promise<ConflictState> {
     // get package.json path from args or current working directory & add filename if necessary
@@ -34,7 +41,7 @@ export class Evaluator {
       ...(packageJson.dependencies
         ? Object.keys(packageJson.dependencies).map((name) => ({
             name,
-            peer: false,
+            peer: true,
           }))
         : []),
     ];
@@ -99,11 +106,11 @@ export class Evaluator {
           const allVersions = (await this.client.getAllVersionsFromRegistry(currentRequirement.name)).versions
             .sort(compareVersions)
             .reverse();
-          const allowedMajorVersions = 2; // TODO: edit default via optional user input
+
           const pinnedVersion = this.heuristics[currentRequirement.name].pinnedVersion;
 
           availableVersions = allVersions.length
-            ? allVersions.filter((v) => compareVersions(v, Math.max(major(allVersions[0]) - allowedMajorVersions, 0).toString()) !== -1)
+            ? allVersions.filter((v) => compareVersions(v, Math.max(major(allVersions[0]) - this.allowedMajorVersions, 0).toString()) !== -1)
             : allVersions;
           if (validRange(pinnedVersion)) {
             availableVersions = availableVersions.filter((v) => satisfies(v, pinnedVersion));
@@ -191,10 +198,27 @@ export class Evaluator {
     if (!this.heuristics[name]) {
       const { versions, meanSize } = await this.client.getAllVersionsFromRegistry(name);
       versions.sort(compareVersions).reverse();
+      versions.filter((v) => compareVersions(v, Math.max(major(versions[0]) - this.allowedMajorVersions, 0).toString()) !== -1);
+
+      // peers heuristic
+      const versionsForPeers = pinnedVersion ? versions.filter((v) => satisfies(v, pinnedVersion)) : versions;
+      const peers: string[] = [];
+      for (const version of versionsForPeers) {
+        const {peerDependencies} = await this.client.getPackageDetails(name,  version);
+        if (peerDependencies) {
+          for (const peerDependency of Object.keys(peerDependencies)) {
+            if (!peers.includes(peerDependency) && this.directDependencies.includes(peerDependency)) {
+              peers.push(peerDependency);
+            }
+          }
+        }
+      }
+
       this.heuristics[name] = {
         conflictPotential: 0,
         isDirectDependency,
         meanSize,
+        peers,
         pinnedVersion,
         versionRange: this.getRangeBetweenVersions(versions[0], versions[versions.length - 1]),
       };

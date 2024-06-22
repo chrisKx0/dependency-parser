@@ -48,7 +48,7 @@ export class RegistryClient {
   }
 
   public readDataFromFiles() {
-    // TODO: force regeneration after time
+    // TODO: force regeneration after some time
     // TODO: try catch instead of if checks
     if (existsSync(`${this.path}/${DETAILS_FILENAME}`)) {
       const details = readFileSync(`${this.path}/${DETAILS_FILENAME}`, { encoding: 'utf8' });
