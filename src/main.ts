@@ -6,6 +6,7 @@ import { Evaluator } from './lib';
 import { Installer } from './lib/installer';
 import { PackageRequirement, ResolvedPackage } from './lib/evaluator.interface';
 import {PackageManager} from "nx/src/utils/package-manager";
+import {createConflictOutput, createResolvedPackageOutput, promptQuestion} from "./lib/user-interactions";
 
 const evaluator = new Evaluator();
 const installer = new Installer();
@@ -18,16 +19,19 @@ async function run(args: ArgumentsCamelCase) {
   // TODO: fine grained error handling
   try {
     const conflictState = await evaluator.evaluate(args);
-    console.debug(conflictState);
     if (conflictState.state === 'OK' && areResolvedPackages(conflictState.result)) {
+      createResolvedPackageOutput(conflictState.result);
       const path = args.path as string;
-      let packageManager: PackageManager[];
+      let packageManager: PackageManager;
       if (args.manager === 'yarn' || args.manager === 'pnpm' || args.manager === 'npm') {
-        packageManager = [args.manager];
+        packageManager = args.manager;
       }
       installer.install(conflictState.result, path, packageManager);
     } else {
-      // TODO: conflict message & user action
+      createConflictOutput();
+      if(await promptQuestion<boolean>('try_again')) {
+        run(args);
+      }
     }
   } catch (e) {
     console.error(e);
@@ -35,7 +39,10 @@ async function run(args: ArgumentsCamelCase) {
 }
 
 yargs(hideBin(process.argv))
-  .command(['update', 'u'], 'resolve and update all peer dependencies by heuristics', {}, (args) => {
+  .command(['update', 'u'], 'Updates all peer dependencies by heuristics', {}, (args) => {
+    run(args);
+  })
+  .command(['install', 'i'], 'Updates all peer dependencies by given versions', {}, (args) => {
     run(args);
   })
   .option('path', {
@@ -46,21 +53,7 @@ yargs(hideBin(process.argv))
   .option('manager', {
     alias: 'm',
     type: 'string',
-    description: 'Package manager to use for installing',
-    choices: ['npm', 'pnpm', 'yarn'],
-  })
-  .command(['install', 'i'], 'resolve and update all peer dependencies by given versions', {}, (args) => {
-    run(args);
-  })
-  .option('path', {
-    alias: 'p',
-    type: 'string',
-    description: 'Path of the package.json file',
-  })
-  .option('manager', {
-    alias: 'm',
-    type: 'string',
-    description: 'Package manager to use for installing',
+    description: 'Package manager to use for installation',
     choices: ['npm', 'pnpm', 'yarn'],
   })
   .parse();

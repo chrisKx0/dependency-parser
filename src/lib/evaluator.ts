@@ -15,6 +15,8 @@ import {
 } from './evaluator.interface';
 import { RegistryClient } from './registry-client';
 import { diff, major, minor, patch, validRange } from 'semver';
+import { createOpenRequirementOutput, promptQuestion } from './user-interactions';
+import { Spinner } from 'clui';
 
 // TODO: Possible Error: Invalid argument not valid semver ('*' received)
 // TODO: include pinned versions of all direct dependencies to result, not only the resolved ones --> why?
@@ -23,7 +25,7 @@ export class Evaluator {
   private readonly client = new RegistryClient();
   private readonly heuristics: Record<string, Heuristics> = {};
   private directDependencies: string[] = [];
-  private allowedMajorVersions = 2; // TODO: edit default via optional user input
+  private allowedMajorVersions: number;
 
   public async evaluate(args: ArgumentsCamelCase): Promise<ConflictState> {
     // get package.json path from args or current working directory & add filename if necessary
@@ -41,7 +43,7 @@ export class Evaluator {
       ...(packageJson.dependencies
         ? Object.keys(packageJson.dependencies).map((name) => ({
             name,
-            peer: true,
+            peer: true, // TODO: check if truthy peer is alright for "normal" dependencies
           }))
         : []),
     ];
@@ -49,6 +51,9 @@ export class Evaluator {
 
     // load cache from disk
     this.client.readDataFromFiles();
+
+    // get allowed major versions by user input
+    this.allowedMajorVersions = await promptQuestion<number>('major_version_count');
 
     // add heuristics for direct dependencies & pinned versions
     const pinnedVersions: Record<string, string> = await this.getPinnedVersions(args._, {
@@ -76,8 +81,17 @@ export class Evaluator {
     // sort direct dependencies by heuristics
     openRequirements.sort(this.sortByHeuristics);
 
+    // show open requirements as user output
+    createOpenRequirementOutput(openRequirements);
+
+    // show spinner during dependency resolution
+    const spinner = new Spinner('Performing dependency resolution...');
+    spinner.start();
+
     // evaluation
     const result = await this.evaluationStep([], [], openRequirements);
+
+    spinner.stop();
 
     // save cache to disk
     this.client.writeDataToFiles();
@@ -110,7 +124,9 @@ export class Evaluator {
           const pinnedVersion = this.heuristics[currentRequirement.name].pinnedVersion;
 
           availableVersions = allVersions.length
-            ? allVersions.filter((v) => compareVersions(v, Math.max(major(allVersions[0]) - this.allowedMajorVersions, 0).toString()) !== -1)
+            ? allVersions.filter(
+                (v) => compareVersions(v, Math.max(major(allVersions[0]) - this.allowedMajorVersions, 0).toString()) !== -1,
+              )
             : allVersions;
           if (validRange(pinnedVersion)) {
             availableVersions = availableVersions.filter((v) => satisfies(v, pinnedVersion));
@@ -204,7 +220,7 @@ export class Evaluator {
       const versionsForPeers = pinnedVersion ? versions.filter((v) => satisfies(v, pinnedVersion)) : versions;
       const peers: string[] = [];
       for (const version of versionsForPeers) {
-        const {peerDependencies} = await this.client.getPackageDetails(name,  version);
+        const { peerDependencies } = await this.client.getPackageDetails(name, version);
         if (peerDependencies) {
           for (const peerDependency of Object.keys(peerDependencies)) {
             if (!peers.includes(peerDependency) && this.directDependencies.includes(peerDependency)) {
@@ -291,31 +307,34 @@ export class Evaluator {
 
   private async getPinnedVersions(params: (string | number)[], dependencies: Record<string, string>): Promise<Record<string, string>> {
     const pinnedVersions = {};
+    let pinPackageJsonVersions = false;
     const command = params.shift();
-    if (command !== 'i' && command !== 'install') {
-      return {};
-    }
-
-    if (params.length) {
-      // get versions from params
-      for (const param of params) {
-        if (typeof param === 'number') {
-          continue;
+    if (command === 'i' || command === 'install') {
+      if (params.length) {
+        // get versions from params
+        for (const param of params) {
+          if (typeof param === 'number') {
+            continue;
+          }
+          const paramSplit = param.split(/(?<!^)@/);
+          const name = paramSplit.shift();
+          if (!paramSplit.length) {
+            const versions = (await this.client.getAllVersionsFromRegistry(name)).versions.sort(compareVersions).reverse();
+            pinnedVersions[name] = versions[0];
+          } else {
+            pinnedVersions[name] = paramSplit.shift();
+          }
         }
-        const paramSplit = param.split(/(?<!^)@/);
-        const name = paramSplit.shift();
-        if (!paramSplit.length) {
-          const versions = (await this.client.getAllVersionsFromRegistry(name)).versions.sort(compareVersions).reverse();
-          pinnedVersions[name] = versions[0];
-        } else {
-          pinnedVersions[name] = paramSplit.shift();
-        }
+        return pinnedVersions;
       }
-    } else {
-      // get versions from dependencies
-      Object.entries(dependencies).forEach(([name, version]) => (pinnedVersions[name] = version));
+      pinPackageJsonVersions = true;
     }
-
+    if (pinPackageJsonVersions || (await promptQuestion<boolean>('pin_versions'))) {
+      // get versions from dependencies
+      Object.entries(dependencies)
+        .filter(([name]) => !pinnedVersions[name])
+        .forEach(([name, version]) => (pinnedVersions[name] = version));
+    }
     return pinnedVersions;
   }
 }

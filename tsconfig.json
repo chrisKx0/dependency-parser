@@ -5,6 +5,7 @@
     "declaration": false,
     "moduleResolution": "node",
     "emitDecoratorMetadata": true,
+    "esModuleInterop": true,
     "experimentalDecorators": true,
     "importHelpers": true,
     "target": "es2015",
@@ -15,7 +16,8 @@
     "baseUrl": ".",
     "paths": {
       "@dp/source": ["src/main.ts"]
-    }
+    },
+    "resolveJsonModule": true
   },
   "files": [],
   "include": [],
