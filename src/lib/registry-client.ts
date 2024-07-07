@@ -48,15 +48,18 @@ export class RegistryClient {
   }
 
   public readDataFromFiles() {
-    // TODO: force regeneration after some time
-    // TODO: try catch instead of if checks
-    if (existsSync(`${this.path}/${DETAILS_FILENAME}`)) {
+    // TODO: force regeneration (--force flag)
+    try {
       const details = readFileSync(`${this.path}/${DETAILS_FILENAME}`, { encoding: 'utf8' });
       this.details = JSON.parse(details);
+    } catch (e) {
+      // file just doesn't exist
     }
-    if (existsSync(`${this.path}/${VERSIONS_FILENAME}`)) {
+    try {
       const versions = readFileSync(`${this.path}/${VERSIONS_FILENAME}`, { encoding: 'utf8' });
       this.versions = JSON.parse(versions);
+    } catch (e) {
+      // file just doesn't exist
     }
   }
 

@@ -5,8 +5,8 @@ import { hideBin } from 'yargs/helpers';
 import { Evaluator } from './lib';
 import { Installer } from './lib/installer';
 import { PackageRequirement, ResolvedPackage } from './lib/evaluator.interface';
-import {PackageManager} from "nx/src/utils/package-manager";
-import {createConflictOutput, createResolvedPackageOutput, promptQuestion} from "./lib/user-interactions";
+import { PackageManager } from 'nx/src/utils/package-manager';
+import { createMessage, createResolvedPackageOutput, promptQuestion, Severity } from './lib/user-interactions';
 
 const evaluator = new Evaluator();
 const installer = new Installer();
@@ -16,25 +16,20 @@ function areResolvedPackages(array: ResolvedPackage[] | PackageRequirement[]): a
 }
 
 async function run(args: ArgumentsCamelCase) {
-  // TODO: fine grained error handling
-  try {
-    const conflictState = await evaluator.evaluate(args);
-    if (conflictState.state === 'OK' && areResolvedPackages(conflictState.result)) {
-      createResolvedPackageOutput(conflictState.result);
-      const path = args.path as string;
-      let packageManager: PackageManager;
-      if (args.manager === 'yarn' || args.manager === 'pnpm' || args.manager === 'npm') {
-        packageManager = args.manager;
-      }
-      installer.install(conflictState.result, path, packageManager);
-    } else {
-      createConflictOutput();
-      if(await promptQuestion<boolean>('try_again')) {
-        run(args);
-      }
+  const conflictState = await evaluator.evaluate(args);
+  if (conflictState.state === 'OK' && areResolvedPackages(conflictState.result)) {
+    createResolvedPackageOutput(conflictState.result);
+    const path = args.path as string;
+    let packageManager: PackageManager;
+    if (args.manager === 'yarn' || args.manager === 'pnpm' || args.manager === 'npm') {
+      packageManager = args.manager;
     }
-  } catch (e) {
-    console.error(e);
+    installer.install(conflictState.result, path, packageManager);
+  } else {
+    createMessage('resolution_failure', Severity.ERROR);
+    if (await promptQuestion<boolean>('try_again')) {
+      run(args);
+    }
   }
 }
 

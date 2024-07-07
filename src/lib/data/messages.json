@@ -1,0 +1,8 @@
+{
+  "installation_failure": "Installation failed with npm. This is most likely caused by peer dependencies. Try to use another package manager in your project.",
+  "missing_package_manager": "No package manager found! Make sure at least one package manager is installed and added to path.",
+  "ng_update_failure": "Couldn't run 'ng update' command. This most likely happens because of wrong Angular / Angular CLI versions or a badly configured Angular workspace.",
+  "nx_migrate_failure": "Couldn't run 'nx migrate' command. This most likely happens because of wrong Nx versions or a badly configured Nx workspace.",
+  "resolution_success": "Dependencies resolved to the following versions:",
+  "resolution_failure": "Dependencies couldn't be resolved with the current properties. This most likely means, that no working combination of your dependency versions exists."
+}

@@ -19,7 +19,7 @@
     "default": true
   },
   "pin_versions": {
-    "message": "Pin the currently specified versions in package.json?",
+    "message": "Pin the currently specified versions of package.json?",
     "type": "confirm",
     "default": false
   },

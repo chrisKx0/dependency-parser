@@ -15,10 +15,12 @@ import {
 } from './evaluator.interface';
 import { RegistryClient } from './registry-client';
 import { diff, major, minor, patch, validRange } from 'semver';
-import { createOpenRequirementOutput, promptQuestion } from './user-interactions';
+import { createMessage, createOpenRequirementOutput, promptQuestion, Severity } from './user-interactions';
 import { Spinner } from 'clui';
 
+// TODO: very slow in dp repository -> check for loop or error
 // TODO: Possible Error: Invalid argument not valid semver ('*' received)
+
 // TODO: include pinned versions of all direct dependencies to result, not only the resolved ones --> why?
 
 export class Evaluator {
@@ -55,11 +57,17 @@ export class Evaluator {
     // get allowed major versions by user input
     this.allowedMajorVersions = await promptQuestion<number>('major_version_count');
 
-    // add heuristics for direct dependencies & pinned versions
+    // get pinned version from command or package.json
     const pinnedVersions: Record<string, string> = await this.getPinnedVersions(args._, {
       ...packageJson.dependencies,
       ...packageJson.peerDependencies,
     });
+
+    // show spinner during heuristics generation
+    let spinner = new Spinner('Preparing dependency resolution...');
+    spinner.start();
+
+    // add heuristics for direct dependencies & pinned versions
     for (const { name } of openRequirements) {
       await this.createHeuristics(name, pinnedVersions[name], true);
     }
@@ -81,17 +89,28 @@ export class Evaluator {
     // sort direct dependencies by heuristics
     openRequirements.sort(this.sortByHeuristics);
 
+    spinner.stop();
+
     // show open requirements as user output
     createOpenRequirementOutput(openRequirements);
 
+    // save cache to disk
+    this.client.writeDataToFiles();
+
     // show spinner during dependency resolution
-    const spinner = new Spinner('Performing dependency resolution...');
+    spinner = new Spinner('Performing dependency resolution...');
     spinner.start();
 
     // evaluation
-    const result = await this.evaluationStep([], [], openRequirements);
-
-    spinner.stop();
+    let result: ConflictState;
+    try {
+      result = await this.evaluationStep([], [], openRequirements);
+      spinner.stop();
+    } catch (e) {
+      result = { state: State.CONFLICT };
+      spinner.stop();
+      createMessage(e.message, Severity.ERROR);
+    }
 
     // save cache to disk
     this.client.writeDataToFiles();
@@ -113,58 +132,51 @@ export class Evaluator {
         )?.semVerInfo;
       }
       let availableVersions: string[];
-      try {
-        if (version) {
-          availableVersions = [version];
-        } else {
-          const allVersions = (await this.client.getAllVersionsFromRegistry(currentRequirement.name)).versions
-            .sort(compareVersions)
-            .reverse();
+      if (version) {
+        availableVersions = [version];
+      } else {
+        const allVersions = (await this.client.getAllVersionsFromRegistry(currentRequirement.name)).versions
+          .sort(compareVersions)
+          .reverse();
 
-          const pinnedVersion = this.heuristics[currentRequirement.name].pinnedVersion;
+        const pinnedVersion = this.heuristics[currentRequirement.name].pinnedVersion;
 
-          availableVersions = allVersions.length
-            ? allVersions.filter(
-                (v) => compareVersions(v, Math.max(major(allVersions[0]) - this.allowedMajorVersions, 0).toString()) !== -1,
-              )
-            : allVersions;
-          if (validRange(pinnedVersion)) {
-            availableVersions = availableVersions.filter((v) => satisfies(v, pinnedVersion));
-          }
+        availableVersions = allVersions.length
+          ? allVersions.filter((v) => compareVersions(v, Math.max(major(allVersions[0]) - this.allowedMajorVersions, 0).toString()) !== -1)
+          : allVersions;
+        if (validRange(pinnedVersion)) {
+          availableVersions = availableVersions.filter((v) => satisfies(v, pinnedVersion));
         }
+      }
 
-        const compatibleVersions = currentRequirement.versionRequirement
-          ? availableVersions.filter((v) => satisfies(v, currentRequirement.versionRequirement.replace('ˆ', '^')))
-          : availableVersions;
+      const compatibleVersions = currentRequirement.versionRequirement
+        ? availableVersions.filter((v) => satisfies(v, currentRequirement.versionRequirement.replace('ˆ', '^')))
+        : availableVersions;
 
-        let conflictState: ConflictState = { state: State.CONFLICT };
+      let conflictState: ConflictState = { state: State.CONFLICT };
 
-        for (const versionToExplore of compatibleVersions) {
-          if (conflictState.state === State.CONFLICT) {
-            const packageDetails = await this.client.getPackageDetails(currentRequirement.name, versionToExplore);
-            if (packageDetails.peerDependencies) {
-              this.heuristics[currentRequirement.name].peers = Object.keys(packageDetails.peerDependencies).filter((peer) =>
-                this.directDependencies.includes(peer),
-              );
-            }
-            conflictState = await this.evaluationStep(
-              currentRequirement.peer &&
-                !selectedPackageVersions.some((rp) => rp.name === packageDetails.name && rp.semVerInfo === packageDetails.version)
-                ? [...selectedPackageVersions, { name: packageDetails.name, semVerInfo: packageDetails.version }]
-                : selectedPackageVersions,
-              [...closedRequirements, currentRequirement],
-              await this.addDependenciesToOpenSet(packageDetails, closedRequirements, openRequirements),
+      for (const versionToExplore of compatibleVersions) {
+        if (conflictState.state === State.CONFLICT) {
+          const packageDetails = await this.client.getPackageDetails(currentRequirement.name, versionToExplore);
+          if (packageDetails.peerDependencies) {
+            this.heuristics[currentRequirement.name].peers = Object.keys(packageDetails.peerDependencies).filter((peer) =>
+              this.directDependencies.includes(peer),
             );
           }
+          conflictState = await this.evaluationStep(
+            currentRequirement.peer &&
+              !selectedPackageVersions.some((rp) => rp.name === packageDetails.name && rp.semVerInfo === packageDetails.version)
+              ? [...selectedPackageVersions, { name: packageDetails.name, semVerInfo: packageDetails.version }]
+              : selectedPackageVersions,
+            [...closedRequirements, currentRequirement],
+            await this.addDependenciesToOpenSet(packageDetails, closedRequirements, openRequirements),
+          );
         }
-        if (conflictState.state === State.CONFLICT) {
-          this.heuristics[currentRequirement.name].conflictPotential++;
-        }
-        return conflictState;
-      } catch (e) {
-        console.error(e);
-        return { state: State.CONFLICT };
       }
+      if (conflictState.state === State.CONFLICT) {
+        this.heuristics[currentRequirement.name].conflictPotential++;
+      }
+      return conflictState;
     } else {
       return { result: selectedPackageVersions, state: State.OK };
     }
