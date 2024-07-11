@@ -3,48 +3,28 @@ import { PackageManager } from 'nx/src/utils/package-manager';
 import { NxJsonConfiguration } from 'nx/src/config/nx-json';
 import { lockFileExists } from 'nx/src/plugins/js/lock-file/lock-file';
 
-import { PACKAGE_BUNDLES, ResolvedPackage } from './evaluator.interface';
+import { ResolvedPackage } from './evaluator.interface';
 import { PackageJson } from 'nx/src/utils/package-json';
 import { execSync } from 'child_process';
 import { validate } from 'compare-versions';
-import { createMessage, promptQuestion, Severity } from './user-interactions';
-import { uniq } from 'lodash';
+import { createMessage, Severity } from './user-interactions';
 
 export class Installer {
-  public async install(resolvedPackages: ResolvedPackage[], path?: string, packageManager?: PackageManager) {
-    path = path ?? process.cwd();
-    const packageJsonPath = path + '/package.json';
-    const nxPath = path + '/nx.json';
+  // TODO: add different error types that can be catched in main that messages get created there
+  public async install(
+    packageManager: string,
+    path: string,
+    nxVersion?: string,
+    ngPackages?: ResolvedPackage[],
+    runMigrations = false,
 
-    // ask for package.json update as user input
-    if (!(await promptQuestion<boolean>('modify_package_json'))) {
-      return;
-    }
-
-    this.updatePackageJson(resolvedPackages, packageJsonPath);
-
-    // ask for dependency installation as user input
-    if (!(await promptQuestion<boolean>('install_dependencies'))) {
-      return;
-    }
-
-    if (!packageManager) {
-      packageManager = await this.getPackageManager(packageJsonPath, nxPath);
-    }
-
-    const nxVersion = resolvedPackages.find((rp) => rp.name.startsWith(PACKAGE_BUNDLES[0]))?.semVerInfo;
-    const ngPackages = resolvedPackages.filter((rp) => rp.name.startsWith(PACKAGE_BUNDLES[1]));
-
-    this.installPackages(packageManager, path, nxVersion, ngPackages);
-  }
-
-  private async installPackages(packageManager: string, path: string, nxVersion?: string, ngPackages?: ResolvedPackage[]) {
+  ) {
     // nx migrate
     if (nxVersion && this.isToolInstalled('nx')) {
       try {
         execSync(`nx migrate ${nxVersion}`, { encoding: 'utf8' });
         // ask if migrations should be run as user input
-        if (await promptQuestion<boolean>('run_migrations')) {
+        if (runMigrations) {
           execSync(`nx migrate --run-migrations=migrations.json`, { encoding: 'utf8' });
         }
       } catch (e) {
@@ -70,13 +50,13 @@ export class Installer {
         createMessage('installation_failure', Severity.ERROR);
       } else {
         createMessage(`Package installation failed with ${packageManager}. Retrying with npm...`, Severity.ERROR);
-        this.installPackages('npm', path);
+        this.install('npm', path);
       }
     }
   }
 
-  private async getPackageManager(packageJsonPath: string, nxPath: string): Promise<PackageManager> {
-    const packageManager: PackageManager[] = [];
+  public getPackageManagers(packageJsonPath: string, nxPath: string): PackageManager[] {
+    const packageManagers: PackageManager[] = [];
 
     // via corepack
     try {
@@ -84,7 +64,7 @@ export class Installer {
       if (packageJson?.packageManager) {
         const pm = packageJson.packageManager.split('@')[0];
         if (pm === 'yarn' || pm === 'pnpm' || (pm === 'npm' && this.isToolInstalled(pm))) {
-          packageManager.push(pm);
+          packageManagers.push(pm);
         }
       }
     } catch (e) {
@@ -95,7 +75,7 @@ export class Installer {
     try {
       const nxConfig: NxJsonConfiguration = JSON.parse(readFileSync(nxPath, { encoding: 'utf8' }));
       if (nxConfig?.cli?.packageManager && this.isToolInstalled(nxConfig.cli.packageManager)) {
-        packageManager.push(nxConfig.cli.packageManager);
+        packageManagers.push(nxConfig.cli.packageManager);
       }
     } catch (e) {
       // file just doesn't exist
@@ -105,23 +85,39 @@ export class Installer {
 
     // pnpm-lock.yaml
     if (lockFileExists('pnpm') && this.isToolInstalled('pnpm')) {
-      packageManager.push('pnpm');
+      packageManagers.push('pnpm');
     }
     // yarn.lock
     if (lockFileExists('yarn') && this.isToolInstalled('yarn')) {
-      packageManager.push('yarn');
+      packageManagers.push('yarn');
     }
     // always add npm if it is installed (should be)
     if (this.isToolInstalled('npm')) {
-      packageManager.push('npm');
+      packageManagers.push('npm');
     }
 
-    if (!packageManager.length) {
-      createMessage('missing_package_manager', Severity.WARNING);
-      return;
-    }
+    return packageManagers;
+  }
 
-    return promptQuestion<PackageManager>('choose_package_manager', uniq(packageManager));
+  public updatePackageJson(resolvedPackages: ResolvedPackage[], path: string) {
+    const packageJson: PackageJson = JSON.parse(readFileSync(path, { encoding: 'utf8' }));
+    if (resolvedPackages.length && !packageJson.dependencies) {
+      packageJson.dependencies = {};
+    }
+    for (const resolvedPackage of resolvedPackages) {
+      if (packageJson.peerDependencies?.[resolvedPackage.name]) {
+        packageJson.peerDependencies[resolvedPackage.name] = resolvedPackage.semVerInfo;
+      } else {
+        packageJson.dependencies[resolvedPackage.name] = resolvedPackage.semVerInfo;
+      }
+      if (packageJson.devDependencies?.[resolvedPackage.name]) {
+        delete packageJson.devDependencies[resolvedPackage.name];
+      }
+      if (packageJson.optionalDependencies?.[resolvedPackage.name]) {
+        delete packageJson.optionalDependencies[resolvedPackage.name];
+      }
+    }
+    writeFileSync(path, JSON.stringify(packageJson), { encoding: 'utf8' });
   }
 
   private isToolInstalled(tool: PackageManager | 'ng' | 'nx') {
@@ -141,26 +137,5 @@ export class Installer {
     } catch (e) {
       return false;
     }
-  }
-
-  private updatePackageJson(resolvedPackages: ResolvedPackage[], path: string) {
-    const packageJson: PackageJson = JSON.parse(readFileSync(path, { encoding: 'utf8' }));
-    if (resolvedPackages.length && !packageJson.dependencies) {
-      packageJson.dependencies = {};
-    }
-    for (const resolvedPackage of resolvedPackages) {
-      if (packageJson.peerDependencies?.[resolvedPackage.name]) {
-        packageJson.peerDependencies[resolvedPackage.name] = resolvedPackage.semVerInfo;
-      } else {
-        packageJson.dependencies[resolvedPackage.name] = resolvedPackage.semVerInfo;
-      }
-      if (packageJson.devDependencies?.[resolvedPackage.name]) {
-        delete packageJson.devDependencies[resolvedPackage.name];
-      }
-      if (packageJson.optionalDependencies?.[resolvedPackage.name]) {
-        delete packageJson.optionalDependencies[resolvedPackage.name];
-      }
-    }
-    writeFileSync(path, JSON.stringify(packageJson), { encoding: 'utf8' });
   }
 }

@@ -15,8 +15,6 @@ import {
 } from './evaluator.interface';
 import { RegistryClient } from './registry-client';
 import { diff, major, minor, patch, validRange } from 'semver';
-import { createMessage, createOpenRequirementOutput, promptQuestion, Severity } from './user-interactions';
-import { Spinner } from 'clui';
 
 // TODO: very slow in dp repository -> check for loop or error
 // TODO: Possible Error: Invalid argument not valid semver ('*' received)
@@ -26,27 +24,27 @@ import { Spinner } from 'clui';
 export class Evaluator {
   private readonly client = new RegistryClient();
   private readonly heuristics: Record<string, Heuristics> = {};
-  private directDependencies: string[] = [];
   private allowedMajorVersions: number;
+  private directDependencies: string[];
 
-  public async evaluate(args: ArgumentsCamelCase): Promise<ConflictState> {
+  public async prepare(args: ArgumentsCamelCase, allowedMajorVersions = 2, pinVersions = false): Promise<PackageRequirement[]> {
     // get package.json path from args or current working directory & add filename if necessary
     const path = ((args.path as string) ?? process.cwd()) + '/package.json';
 
     // read package.json to retrieve dependencies and peer dependencies
-    const packageJson: PackageJson = JSON.parse(fs.readFileSync(path, { encoding: 'utf8' }));
+    const packageJson: PackageJson = JSON.parse(fs.readFileSync(path, {encoding: 'utf8'}));
     const openRequirements: PackageRequirement[] = [
       ...(packageJson.peerDependencies
         ? Object.keys(packageJson.peerDependencies).map((name) => ({
-            name,
-            peer: true,
-          }))
+          name,
+          peer: true,
+        }))
         : []),
       ...(packageJson.dependencies
         ? Object.keys(packageJson.dependencies).map((name) => ({
-            name,
-            peer: true, // TODO: check if truthy peer is alright for "normal" dependencies
-          }))
+          name,
+          peer: true, // TODO: check if truthy peer is alright for "normal" dependencies
+        }))
         : []),
     ];
     this.directDependencies = openRequirements.map((pr) => pr.name);
@@ -55,20 +53,20 @@ export class Evaluator {
     this.client.readDataFromFiles();
 
     // get allowed major versions by user input
-    this.allowedMajorVersions = await promptQuestion<number>('major_version_count');
+    this.allowedMajorVersions = allowedMajorVersions;
 
     // get pinned version from command or package.json
-    const pinnedVersions: Record<string, string> = await this.getPinnedVersions(args._, {
-      ...packageJson.dependencies,
-      ...packageJson.peerDependencies,
-    });
-
-    // show spinner during heuristics generation
-    let spinner = new Spinner('Preparing dependency resolution...');
-    spinner.start();
+    const pinnedVersions: Record<string, string> = await this.getPinnedVersions(
+      args._,
+      {
+        ...packageJson.dependencies,
+        ...packageJson.peerDependencies,
+      },
+      pinVersions,
+    );
 
     // add heuristics for direct dependencies & pinned versions
-    for (const { name } of openRequirements) {
+    for (const {name} of openRequirements) {
       await this.createHeuristics(name, pinnedVersions[name], true);
     }
     for (const [name, pinnedVersion] of Object.entries(pinnedVersions)) {
@@ -78,7 +76,7 @@ export class Evaluator {
       if (openRequirement) {
         openRequirement.versionRequirement = pinnedVersion;
       } else {
-        openRequirements.push({ name, peer: false, versionRequirement: pinnedVersion });
+        openRequirements.push({name, peer: false, versionRequirement: pinnedVersion});
       }
       // edit bundled packages to also be of the same version
       openRequirements
@@ -89,29 +87,14 @@ export class Evaluator {
     // sort direct dependencies by heuristics
     openRequirements.sort(this.sortByHeuristics);
 
-    spinner.stop();
-
-    // show open requirements as user output
-    createOpenRequirementOutput(openRequirements);
-
     // save cache to disk
     this.client.writeDataToFiles();
 
-    // show spinner during dependency resolution
-    spinner = new Spinner('Performing dependency resolution...');
-    spinner.start();
+    return openRequirements;
+  }
 
-    // evaluation
-    let result: ConflictState;
-    try {
-      result = await this.evaluationStep([], [], openRequirements);
-      spinner.stop();
-    } catch (e) {
-      result = { state: State.CONFLICT };
-      spinner.stop();
-      createMessage(e.message, Severity.ERROR);
-    }
-
+  public async evaluate(openRequirements: PackageRequirement[]) {
+    const result = await this.evaluationStep([], [], openRequirements);
     // save cache to disk
     this.client.writeDataToFiles();
     return result;
@@ -317,7 +300,11 @@ export class Evaluator {
     return { type, value: Math.abs(value) };
   }
 
-  private async getPinnedVersions(params: (string | number)[], dependencies: Record<string, string>): Promise<Record<string, string>> {
+  private async getPinnedVersions(
+    params: (string | number)[],
+    dependencies: Record<string, string>,
+    pinVersions = false,
+  ): Promise<Record<string, string>> {
     const pinnedVersions = {};
     let pinPackageJsonVersions = false;
     const command = params.shift();
@@ -341,7 +328,7 @@ export class Evaluator {
       }
       pinPackageJsonVersions = true;
     }
-    if (pinPackageJsonVersions || (await promptQuestion<boolean>('pin_versions'))) {
+    if (pinPackageJsonVersions || pinVersions) {
       // get versions from dependencies
       Object.entries(dependencies)
         .filter(([name]) => !pinnedVersions[name])
