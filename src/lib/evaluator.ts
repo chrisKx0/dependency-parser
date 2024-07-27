@@ -32,19 +32,19 @@ export class Evaluator {
     const path = ((args.path as string) ?? process.cwd()) + '/package.json';
 
     // read package.json to retrieve dependencies and peer dependencies
-    const packageJson: PackageJson = JSON.parse(fs.readFileSync(path, {encoding: 'utf8'}));
+    const packageJson: PackageJson = JSON.parse(fs.readFileSync(path, { encoding: 'utf8' }));
     const openRequirements: PackageRequirement[] = [
       ...(packageJson.peerDependencies
         ? Object.keys(packageJson.peerDependencies).map((name) => ({
-          name,
-          peer: true,
-        }))
+            name,
+            peer: true,
+          }))
         : []),
       ...(packageJson.dependencies
         ? Object.keys(packageJson.dependencies).map((name) => ({
-          name,
-          peer: true, // TODO: check if truthy peer is alright for "normal" dependencies
-        }))
+            name,
+            peer: true, // TODO: check if truthy peer is alright for "normal" dependencies
+          }))
         : []),
     ];
     this.directDependencies = openRequirements.map((pr) => pr.name);
@@ -66,7 +66,7 @@ export class Evaluator {
     );
 
     // add heuristics for direct dependencies & pinned versions
-    for (const {name} of openRequirements) {
+    for (const { name } of openRequirements) {
       await this.createHeuristics(name, pinnedVersions[name], true);
     }
     for (const [name, pinnedVersion] of Object.entries(pinnedVersions)) {
@@ -76,7 +76,7 @@ export class Evaluator {
       if (openRequirement) {
         openRequirement.versionRequirement = pinnedVersion;
       } else {
-        openRequirements.push({name, peer: false, versionRequirement: pinnedVersion});
+        openRequirements.push({ name, peer: false, versionRequirement: pinnedVersion });
       }
       // edit bundled packages to also be of the same version
       openRequirements

@@ -10,15 +10,8 @@ import { validate } from 'compare-versions';
 import { createMessage, Severity } from './user-interactions';
 
 export class Installer {
-  // TODO: add different error types that can be catched in main that messages get created there
-  public async install(
-    packageManager: string,
-    path: string,
-    nxVersion?: string,
-    ngPackages?: ResolvedPackage[],
-    runMigrations = false,
-
-  ) {
+  // TODO: add different error types that can be caught in main that messages get created there
+  public async install(packageManager: string, path: string, nxVersion?: string, ngPackages?: ResolvedPackage[], runMigrations = false) {
     // nx migrate
     if (nxVersion && this.isToolInstalled('nx')) {
       try {
@@ -50,7 +43,7 @@ export class Installer {
         createMessage('installation_failure', Severity.ERROR);
       } else {
         createMessage(`Package installation failed with ${packageManager}. Retrying with npm...`, Severity.ERROR);
-        this.install('npm', path);
+        this.install('npm', path, nxVersion, ngPackages, runMigrations);
       }
     }
   }

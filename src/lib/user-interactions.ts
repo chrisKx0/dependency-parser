@@ -13,10 +13,21 @@ export enum Severity {
   ERROR = 'error',
 }
 
-export async function promptQuestion<T extends PackageManager | number | boolean>(key: string, choices?: string[]): Promise<T> {
+export async function promptQuestion<T extends PackageManager | number | boolean | string[]>(
+  key: string,
+  choices?: string[],
+  defaults?: string[],
+): Promise<T> {
   const question: DistinctQuestion = questions[key];
   console.assert(question, `Question with key ${key} doesn't exist!`);
-  const answer = await inquirer.prompt([{ name: 'value', ...question, choices: question.type === 'list' ? choices : null }]);
+  const answer = await inquirer.prompt([
+    {
+      name: 'value',
+      ...question,
+      choices: question.type === 'list' || question.type === 'checkbox' ? choices : null,
+      default: question.type === 'checkbox' ? defaults : null,
+    },
+  ]);
   console.log();
   return answer.value;
 }
