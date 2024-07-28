@@ -2,7 +2,7 @@ import chalk from 'chalk';
 import inquirer, { DistinctQuestion } from 'inquirer';
 import messages from './data/messages.json';
 import questions from './data/questions.json';
-import { PackageRequirement, ResolvedPackage } from './evaluator.interface';
+import { PackageRequirement, ResolvedPackage } from './interfaces';
 import { max, repeat } from 'lodash';
 import { PackageManager } from 'nx/src/utils/package-manager';
 

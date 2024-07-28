@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as process from 'process';
 import { ArgumentsCamelCase } from 'yargs';
 import {
+  ArgumentType,
   ConflictState,
   Heuristics,
   PACKAGE_BUNDLES,
@@ -12,24 +13,29 @@ import {
   ResolvedPackage,
   State,
   VersionRange,
-} from './evaluator.interface';
+} from './interfaces';
 import { RegistryClient } from './registry-client';
 import { diff, major, minor, patch, validRange } from 'semver';
 
 // TODO: very slow in dp repository -> check for loop or error
 // TODO: Possible Error: Invalid argument not valid semver ('*' received)
-
-// TODO: include pinned versions of all direct dependencies to result, not only the resolved ones --> why?
+// TODO: check if pinned versions of all direct dependencies should be included in result, not only the resolved ones
 
 export class Evaluator {
   private readonly client = new RegistryClient();
   private readonly heuristics: Record<string, Heuristics> = {};
-  private allowedMajorVersions: number;
   private directDependencies: string[];
 
-  public async prepare(args: ArgumentsCamelCase, allowedMajorVersions = 2, pinVersions = false): Promise<PackageRequirement[]> {
+  constructor(
+    private readonly allowedMajorVersions = 2,
+    private readonly allowPreReleases = false,
+    private readonly pinVersions = false,
+    private readonly forceRegeneration = false,
+  ) {}
+
+  public async prepare(args: ArgumentsCamelCase): Promise<PackageRequirement[]> {
     // get package.json path from args or current working directory & add filename if necessary
-    const path = ((args.path as string) ?? process.cwd()) + '/package.json';
+    const path = ((args[ArgumentType.PATH] as string) ?? process.cwd()) + '/package.json';
 
     // read package.json to retrieve dependencies and peer dependencies
     const packageJson: PackageJson = JSON.parse(fs.readFileSync(path, { encoding: 'utf8' }));
@@ -50,20 +56,13 @@ export class Evaluator {
     this.directDependencies = openRequirements.map((pr) => pr.name);
 
     // load cache from disk
-    this.client.readDataFromFiles();
-
-    // get allowed major versions by user input
-    this.allowedMajorVersions = allowedMajorVersions;
+    this.client.readDataFromFiles(this.forceRegeneration);
 
     // get pinned version from command or package.json
-    const pinnedVersions: Record<string, string> = await this.getPinnedVersions(
-      args._,
-      {
-        ...packageJson.dependencies,
-        ...packageJson.peerDependencies,
-      },
-      pinVersions,
-    );
+    const pinnedVersions: Record<string, string> = await this.getPinnedVersions(args._, {
+      ...packageJson.dependencies,
+      ...packageJson.peerDependencies,
+    });
 
     // add heuristics for direct dependencies & pinned versions
     for (const { name } of openRequirements) {
@@ -125,7 +124,11 @@ export class Evaluator {
         const pinnedVersion = this.heuristics[currentRequirement.name].pinnedVersion;
 
         availableVersions = allVersions.length
-          ? allVersions.filter((v) => compareVersions(v, Math.max(major(allVersions[0]) - this.allowedMajorVersions, 0).toString()) !== -1)
+          ? allVersions.filter(
+              (v) =>
+                compareVersions(v, Math.max(major(allVersions[0]) - this.allowedMajorVersions, 0).toString()) !== -1 &&
+                (this.allowPreReleases || !v.includes('-')),
+            )
           : allVersions;
         if (validRange(pinnedVersion)) {
           availableVersions = availableVersions.filter((v) => satisfies(v, pinnedVersion));
@@ -209,7 +212,11 @@ export class Evaluator {
     if (!this.heuristics[name]) {
       const { versions, meanSize } = await this.client.getAllVersionsFromRegistry(name);
       versions.sort(compareVersions).reverse();
-      versions.filter((v) => compareVersions(v, Math.max(major(versions[0]) - this.allowedMajorVersions, 0).toString()) !== -1);
+      versions.filter(
+        (v) =>
+          compareVersions(v, Math.max(major(versions[0]) - this.allowedMajorVersions, 0).toString()) !== -1 &&
+          (this.allowPreReleases || !v.includes('-')),
+      );
 
       // peers heuristic
       const versionsForPeers = pinnedVersion ? versions.filter((v) => satisfies(v, pinnedVersion)) : versions;
@@ -300,11 +307,7 @@ export class Evaluator {
     return { type, value: Math.abs(value) };
   }
 
-  private async getPinnedVersions(
-    params: (string | number)[],
-    dependencies: Record<string, string>,
-    pinVersions = false,
-  ): Promise<Record<string, string>> {
+  private async getPinnedVersions(params: (string | number)[], dependencies: Record<string, string>): Promise<Record<string, string>> {
     const pinnedVersions = {};
     let pinPackageJsonVersions = false;
     const command = params.shift();
@@ -318,7 +321,10 @@ export class Evaluator {
           const paramSplit = param.split(/(?<!^)@/);
           const name = paramSplit.shift();
           if (!paramSplit.length) {
-            const versions = (await this.client.getAllVersionsFromRegistry(name)).versions.sort(compareVersions).reverse();
+            const versions = (await this.client.getAllVersionsFromRegistry(name)).versions
+              .filter((v) => this.allowPreReleases || !v.includes('-'))
+              .sort(compareVersions)
+              .reverse();
             pinnedVersions[name] = versions[0];
           } else {
             pinnedVersions[name] = paramSplit.shift();
@@ -328,7 +334,7 @@ export class Evaluator {
       }
       pinPackageJsonVersions = true;
     }
-    if (pinPackageJsonVersions || pinVersions) {
+    if (pinPackageJsonVersions || this.pinVersions) {
       // get versions from dependencies
       Object.entries(dependencies)
         .filter(([name]) => !pinnedVersions[name])

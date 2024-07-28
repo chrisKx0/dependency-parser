@@ -3,7 +3,7 @@ import { PackageManager } from 'nx/src/utils/package-manager';
 import { NxJsonConfiguration } from 'nx/src/config/nx-json';
 import { lockFileExists } from 'nx/src/plugins/js/lock-file/lock-file';
 
-import { ResolvedPackage } from './evaluator.interface';
+import { ResolvedPackage } from './interfaces';
 import { PackageJson } from 'nx/src/utils/package-json';
 import { execSync } from 'child_process';
 import { validate } from 'compare-versions';

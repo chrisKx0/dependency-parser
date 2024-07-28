@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { getPackageManifest, getPackument } from 'query-registry';
-import { PackageDetails, Versions } from './evaluator.interface';
+import { PackageDetails, Versions } from './interfaces';
 import { sum } from 'lodash';
 
 const DETAILS_FILENAME = 'details.json';
@@ -47,8 +47,10 @@ export class RegistryClient {
     return versions;
   }
 
-  public readDataFromFiles() {
-    // TODO: force regeneration (--force flag)
+  public readDataFromFiles(forceRegeneration = false) {
+    if (forceRegeneration) {
+      return;
+    }
     try {
       const details = readFileSync(`${this.path}/${DETAILS_FILENAME}`, { encoding: 'utf8' });
       this.details = JSON.parse(details);

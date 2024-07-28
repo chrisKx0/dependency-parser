@@ -49,3 +49,18 @@ export interface VersionRange {
   type: ReleaseType;
   value: number;
 }
+
+export enum ArgumentType {
+  ALL_DEPENDENCIES = 'all-dependencies',
+  FORCE_REGENERATION = 'force-regeneration',
+  HIDE_PROMPTS = 'hide-prompts',
+  INSTALL = 'install',
+  MAJOR_VERSIONS = 'major-versions',
+  MIGRATE = 'migrate',
+  MODIFY_JSON = 'modify-json',
+  PACKAGE_MANAGER = 'package-manager',
+  PATH = 'path',
+  PIN_VERSIONS = 'pin-versions',
+  PRE_RELEASE = 'pre-release',
+  RETRY = 'retry',
+}
