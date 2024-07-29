@@ -2,12 +2,15 @@
   "name": "@dp/source",
   "version": "0.0.1",
   "license": "MIT",
+  "author": "Christian Knauf",
   "scripts": {
     "run": "nx main",
     "build": "nx build && npm i -g .",
     "test": "nx test"
   },
   "dependencies": {
+    "@actions/core": "^1.10.1",
+    "@actions/github": "^6.0.0",
     "chalk": "^4.1.2",
     "clui": "^0.3.6",
     "compare-versions": "^6.1.0",
@@ -48,10 +51,10 @@
     "vitest": "~0.34.6"
   },
   "type": "commonjs",
-  "main": "./src/main.ts",
-  "typings": "./src/main.d.ts",
+  "main": "./src/interactive.ts",
+  "typings": "./src/interactive.d.ts",
   "bin": {
-    "dp": "./dist/dp/src/main.js"
+    "dp": "./dist/dp/src/interactive.js"
   },
   "packageManager": "pnpm@9.3.0+sha512.ee7b93e0c2bd11409c6424f92b866f31d3ea1bef5fbe47d3c7500cdc3c9668833d2e55681ad66df5b640c61fa9dc25d546efa54d76d7f8bf54b13614ac293631"
 }

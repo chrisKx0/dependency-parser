@@ -15,57 +15,47 @@ function areResolvedPackages(array: ResolvedPackage[] | PackageRequirement[]): a
 }
 
 async function run(args: ArgumentsCamelCase) {
-  let evaluator: Evaluator;
-  let openRequirements: PackageRequirement[];
-  let spinner: Spinner;
+  // initial user inputs
+  const showPrompts = !args[ArgumentType.SKIP_PROMPTS];
+  const allowedMajorVersions = (args[ArgumentType.MAJOR_VERSIONS] as number) ?? (!showPrompts && 2) ?? (await promptQuestion<number>('major_version_count'));
+  const allowPreReleases =
+    args[ArgumentType.PRE_RELEASE] != null ? !!args[ArgumentType.PRE_RELEASE] : showPrompts && await promptQuestion<boolean>('allow_pre_releases');
+  const pinVersions =
+    args[ArgumentType.PIN_VERSIONS] != null ? !!args[ArgumentType.PIN_VERSIONS] : showPrompts && await promptQuestion<boolean>('pin_versions');
+  const forceRegeneration = !!args[ArgumentType.FORCE_REGENERATION];
 
-  const showPrompts = !args[ArgumentType.HIDE_PROMPTS];
-  console.debug(args);
+  // initialize evaluator
+  const evaluator = new Evaluator(allowedMajorVersions, allowPreReleases, pinVersions, forceRegeneration);
 
-  if (showPrompts) {
-    // initialize evaluator with user prompts
-    const allowedMajorVersions = (args[ArgumentType.MAJOR_VERSIONS] as number) || (await promptQuestion<number>('major_version_count'));
-    const allowPreReleases =
-      args[ArgumentType.PRE_RELEASE] != null ? !!args[ArgumentType.PRE_RELEASE] : await promptQuestion<boolean>('allow_pre_releases');
-    const pinVersions =
-      args[ArgumentType.PIN_VERSIONS] != null ? !!args[ArgumentType.PIN_VERSIONS] : await promptQuestion<boolean>('pin_versions');
-    const forceRegeneration = !!args[ArgumentType.FORCE_REGENERATION];
-    evaluator = new Evaluator(allowedMajorVersions, allowPreReleases, pinVersions, forceRegeneration);
+  // show spinner during preparation
+  let spinner = new Spinner('Preparing dependency resolution...');
+  spinner.start();
 
-    // show spinner during preparation
-    spinner = new Spinner('Preparing dependency resolution...');
-    spinner.start();
+  let openRequirements = await evaluator.prepare(args);
 
-    openRequirements = await evaluator.prepare(args);
+  spinner.stop();
 
-    spinner.stop();
-
-    // let user choose the packages he likes to include in package resolution
-    if (!args[ArgumentType.ALL_DEPENDENCIES]) {
-      const names = openRequirements.map((pr) => pr.name);
-      const requirementsToConsider = await promptQuestion<string[]>('choose_dependencies_to_resolve', names, names);
-      openRequirements = openRequirements.filter((pr) => requirementsToConsider.includes(pr.name));
-    } else {
-      // show open requirements as user output
-      createOpenRequirementOutput(openRequirements);
-    }
-
-    // show spinner during dependency resolution
-    spinner = new Spinner('Performing dependency resolution...');
-    spinner.start();
+  // let user choose the packages he likes to include in package resolution
+  if (showPrompts && !args[ArgumentType.ALL_DEPENDENCIES]) {
+    const names = openRequirements.map((pr) => pr.name);
+    const requirementsToConsider = await promptQuestion<string[]>('choose_dependencies_to_resolve', names, names);
+    openRequirements = openRequirements.filter((pr) => requirementsToConsider.includes(pr.name));
   } else {
-    // initialize evaluator without user prompts
-    evaluator = new Evaluator();
-    openRequirements = await evaluator.prepare(args);
+    // show open requirements as user output
+    createOpenRequirementOutput(openRequirements);
   }
+
+  // show spinner during dependency resolution
+  spinner = new Spinner('Performing dependency resolution...');
+  spinner.start();
 
   let conflictState: ConflictState;
   try {
     conflictState = await evaluator.evaluate(openRequirements);
-    spinner?.stop();
+    spinner.stop();
   } catch (e) {
     conflictState = { state: State.CONFLICT };
-    spinner?.stop();
+    spinner.stop();
     createMessage(e.message, Severity.ERROR);
   }
 
@@ -78,14 +68,22 @@ async function run(args: ArgumentsCamelCase) {
     const nxPath = path + '/nx.json';
 
     // ask for package.json update as user input
-    if (!(args[ArgumentType.MODIFY_JSON] != null ? !!args[ArgumentType.MODIFY_JSON] : !showPrompts || await promptQuestion<boolean>('modify_package_json'))) {
+    if (
+      !(args[ArgumentType.MODIFY_JSON] != null
+        ? !!args[ArgumentType.MODIFY_JSON]
+        : !showPrompts || (await promptQuestion<boolean>('modify_package_json')))
+    ) {
       return;
     }
 
     installer.updatePackageJson(conflictState.result, packageJsonPath);
 
     // ask for dependency installation as user input
-    if (!(args[ArgumentType.INSTALL] != null ? !!args[ArgumentType.INSTALL] : !showPrompts || !(await promptQuestion<boolean>('install_dependencies')))) {
+    if (
+      !(args[ArgumentType.INSTALL] != null
+        ? !!args[ArgumentType.INSTALL]
+        : !showPrompts || !(await promptQuestion<boolean>('install_dependencies')))
+    ) {
       return;
     }
 
@@ -102,18 +100,27 @@ async function run(args: ArgumentsCamelCase) {
         createMessage('missing_package_manager', Severity.WARNING);
         return;
       }
-      packageManager = showPrompts ? await promptQuestion<PackageManager>('choose_package_manager', uniq(packageManagers)) : packageManagers[0];
+      packageManager = showPrompts
+        ? await promptQuestion<PackageManager>('choose_package_manager', uniq(packageManagers))
+        : packageManagers[0];
     }
 
     const nxVersion = conflictState.result.find((rp) => rp.name.startsWith(PACKAGE_BUNDLES[0]))?.semVerInfo;
     const ngPackages = conflictState.result.filter((rp) => rp.name.startsWith(PACKAGE_BUNDLES[1]));
     const runMigrations =
-      args[ArgumentType.MIGRATE] != null ? !!args[ArgumentType.MIGRATE] : showPrompts && await promptQuestion<boolean>('run_migrations');
+      args[ArgumentType.MIGRATE] != null ? !!args[ArgumentType.MIGRATE] : showPrompts && (await promptQuestion<boolean>('run_migrations'));
 
-    installer.install(packageManager, path, nxVersion, ngPackages, runMigrations);
+    // show spinner during installation
+    spinner = new Spinner(`Performing installation with ${packageManager}...`);
+    spinner.start();
+
+    await installer.install(packageManager, path, nxVersion, ngPackages, runMigrations);
+
+    spinner.stop();
   } else {
     createMessage('resolution_failure', Severity.ERROR);
-    const retry = args[ArgumentType.RETRY] != null ? !!args[ArgumentType.RETRY] : showPrompts && await promptQuestion<boolean>('try_again');
+    const retry =
+      args[ArgumentType.RETRY] != null ? !!args[ArgumentType.RETRY] : showPrompts && (await promptQuestion<boolean>('try_again'));
     if (retry) {
       run(args);
     }
@@ -138,12 +145,6 @@ yargs(hideBin(process.argv))
     type: 'boolean',
     boolean: true,
     description: 'Force cache regeneration',
-  })
-  .option(ArgumentType.HIDE_PROMPTS, {
-    alias: 'h',
-    type: 'boolean',
-    boolean: true,
-    description: 'Disable all user prompts and outputs',
   })
   .option(ArgumentType.INSTALL, {
     alias: 'i',
@@ -180,13 +181,13 @@ yargs(hideBin(process.argv))
     description: 'Path of the package.json file',
   })
   .option(ArgumentType.PIN_VERSIONS, {
-    alias: 'p',
+    alias: 'v',
     type: 'boolean',
     boolean: true,
     description: 'Pin the versions specified in package.json',
   })
   .option(ArgumentType.PRE_RELEASE, {
-    alias: 'b', // beta
+    alias: 'p',
     type: 'boolean',
     boolean: true,
     description: 'Allow dependencies with pre-release versions (e.g. beta versions)',
@@ -196,5 +197,11 @@ yargs(hideBin(process.argv))
     type: 'boolean',
     boolean: true,
     description: 'Retry after failed attempts',
+  })
+  .option(ArgumentType.SKIP_PROMPTS, {
+    alias: 's',
+    type: 'boolean',
+    boolean: true,
+    description: 'Disable all user prompts and outputs',
   })
   .parse();

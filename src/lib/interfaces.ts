@@ -53,7 +53,6 @@ export interface VersionRange {
 export enum ArgumentType {
   ALL_DEPENDENCIES = 'all-dependencies',
   FORCE_REGENERATION = 'force-regeneration',
-  HIDE_PROMPTS = 'hide-prompts',
   INSTALL = 'install',
   MAJOR_VERSIONS = 'major-versions',
   MIGRATE = 'migrate',
@@ -63,4 +62,5 @@ export enum ArgumentType {
   PIN_VERSIONS = 'pin-versions',
   PRE_RELEASE = 'pre-release',
   RETRY = 'retry',
+  SKIP_PROMPTS = 'hide-prompts',
 }

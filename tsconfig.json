@@ -15,7 +15,7 @@
     "skipDefaultLibCheck": true,
     "baseUrl": ".",
     "paths": {
-      "@dp/source": ["src/main.ts"]
+      "@dp/source": ["src/interactive.ts"]
     },
     "resolveJsonModule": true
   },

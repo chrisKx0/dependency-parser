@@ -10,7 +10,7 @@ import { validate } from 'compare-versions';
 import { createMessage, Severity } from './user-interactions';
 
 export class Installer {
-  // TODO: add different error types that can be caught in main that messages get created there
+  // TODO: add different error types that can be caught in main that messages get created there -> only needed when ALL messages should be hidden in unattended
   public async install(packageManager: string, path: string, nxVersion?: string, ngPackages?: ResolvedPackage[], runMigrations = false) {
     // nx migrate
     if (nxVersion && this.isToolInstalled('nx')) {
@@ -35,7 +35,6 @@ export class Installer {
     }
 
     // installation
-    createMessage(`Running ${packageManager} install command...`);
     try {
       execSync(`${packageManager} install`, { encoding: 'utf8', cwd: path });
     } catch (e) {
@@ -43,7 +42,7 @@ export class Installer {
         createMessage('installation_failure', Severity.ERROR);
       } else {
         createMessage(`Package installation failed with ${packageManager}. Retrying with npm...`, Severity.ERROR);
-        this.install('npm', path, nxVersion, ngPackages, runMigrations);
+        await this.install('npm', path, nxVersion, ngPackages, runMigrations);
       }
     }
   }
