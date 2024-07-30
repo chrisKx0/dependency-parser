@@ -1,14 +1,25 @@
 #!/usr/bin/env node
+import { Spinner } from 'clui';
+import { uniq } from 'lodash';
+import { PackageManager } from 'nx/src/utils/package-manager';
 import yargs, { ArgumentsCamelCase } from 'yargs';
 import { hideBin } from 'yargs/helpers';
 
-import { Evaluator } from './lib';
-import { Installer } from './lib/installer';
-import { ArgumentType, ConflictState, PACKAGE_BUNDLES, PackageRequirement, ResolvedPackage, State } from './lib/interfaces';
-import { PackageManager } from 'nx/src/utils/package-manager';
-import { createMessage, createOpenRequirementOutput, createResolvedPackageOutput, promptQuestion, Severity } from './lib/user-interactions';
-import { Spinner } from 'clui';
-import { uniq } from 'lodash';
+import {
+  ArgumentType,
+  ConflictState,
+  PACKAGE_BUNDLES,
+  PackageRequirement,
+  ResolvedPackage,
+  State,
+  Evaluator,
+  Installer,
+  createMessage,
+  createOpenRequirementOutput,
+  createResolvedPackageOutput,
+  promptQuestion,
+  Severity,
+} from './lib';
 
 function areResolvedPackages(array: ResolvedPackage[] | PackageRequirement[]): array is ResolvedPackage[] {
   return Array.isArray(array) && (!array.length || !!(array[0] as ResolvedPackage).semVerInfo);
@@ -17,11 +28,16 @@ function areResolvedPackages(array: ResolvedPackage[] | PackageRequirement[]): a
 async function run(args: ArgumentsCamelCase) {
   // initial user inputs
   const showPrompts = !args[ArgumentType.SKIP_PROMPTS];
-  const allowedMajorVersions = (args[ArgumentType.MAJOR_VERSIONS] as number) ?? (!showPrompts && 2) ?? (await promptQuestion<number>('major_version_count'));
+  const allowedMajorVersions =
+    (args[ArgumentType.MAJOR_VERSIONS] as number) ?? (!showPrompts ? 2 : (await promptQuestion<number>('major_version_count')));
   const allowPreReleases =
-    args[ArgumentType.PRE_RELEASE] != null ? !!args[ArgumentType.PRE_RELEASE] : showPrompts && await promptQuestion<boolean>('allow_pre_releases');
+    args[ArgumentType.PRE_RELEASE] != null
+      ? !!args[ArgumentType.PRE_RELEASE]
+      : showPrompts && (await promptQuestion<boolean>('allow_pre_releases'));
   const pinVersions =
-    args[ArgumentType.PIN_VERSIONS] != null ? !!args[ArgumentType.PIN_VERSIONS] : showPrompts && await promptQuestion<boolean>('pin_versions');
+    args[ArgumentType.PIN_VERSIONS] != null
+      ? !!args[ArgumentType.PIN_VERSIONS]
+      : showPrompts && (await promptQuestion<boolean>('pin_versions'));
   const forceRegeneration = !!args[ArgumentType.FORCE_REGENERATION];
 
   // initialize evaluator
@@ -32,7 +48,7 @@ async function run(args: ArgumentsCamelCase) {
   spinner.start();
 
   let openRequirements = await evaluator.prepare(args);
-
+  console.log(showPrompts, allowedMajorVersions);
   spinner.stop();
 
   // let user choose the packages he likes to include in package resolution
@@ -82,7 +98,7 @@ async function run(args: ArgumentsCamelCase) {
     if (
       !(args[ArgumentType.INSTALL] != null
         ? !!args[ArgumentType.INSTALL]
-        : !showPrompts || !(await promptQuestion<boolean>('install_dependencies')))
+        : !showPrompts || (await promptQuestion<boolean>('install_dependencies')))
     ) {
       return;
     }

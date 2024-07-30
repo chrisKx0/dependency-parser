@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as process from 'process';
 import { ArgumentsCamelCase } from 'yargs';
 import {
+  ArgsUnattended,
   ArgumentType,
   ConflictState,
   Heuristics,
@@ -21,6 +22,10 @@ import { diff, major, minor, patch, validRange } from 'semver';
 // TODO: Possible Error: Invalid argument not valid semver ('*' received)
 // TODO: check if pinned versions of all direct dependencies should be included in result, not only the resolved ones
 
+function isArgumentsCamelCase(args: ArgumentsCamelCase | ArgsUnattended): args is ArgumentsCamelCase {
+  return !!(args as ArgumentsCamelCase)._;
+}
+
 export class Evaluator {
   private readonly client = new RegistryClient();
   private readonly heuristics: Record<string, Heuristics> = {};
@@ -33,7 +38,7 @@ export class Evaluator {
     private readonly forceRegeneration = false,
   ) {}
 
-  public async prepare(args: ArgumentsCamelCase): Promise<PackageRequirement[]> {
+  public async prepare(args: ArgumentsCamelCase | ArgsUnattended): Promise<PackageRequirement[]> {
     // get package.json path from args or current working directory & add filename if necessary
     const path = ((args[ArgumentType.PATH] as string) ?? process.cwd()) + '/package.json';
 
@@ -59,10 +64,12 @@ export class Evaluator {
     this.client.readDataFromFiles(this.forceRegeneration);
 
     // get pinned version from command or package.json
-    const pinnedVersions: Record<string, string> = await this.getPinnedVersions(args._, {
-      ...packageJson.dependencies,
-      ...packageJson.peerDependencies,
-    });
+    const pinnedVersions: Record<string, string> = isArgumentsCamelCase(args)
+      ? await this.getPinnedVersions(args._, {
+          ...packageJson.dependencies,
+          ...packageJson.peerDependencies,
+        })
+      : {};
 
     // add heuristics for direct dependencies & pinned versions
     for (const { name } of openRequirements) {

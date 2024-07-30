@@ -1,0 +1,12 @@
+name: "Dependency Parser Example"
+on:
+  push
+
+jobs:
+  parseDependencies:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update peer dependencies
+        uses: chrisKx0/dependency-parser@main
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}

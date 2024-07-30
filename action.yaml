@@ -1,0 +1,17 @@
+name: dependency-parser
+description: Keeps the peer dependencies of your project up-to-date
+author: Christian Knauf
+inputs:
+  # Core options
+  base-branch:
+    description: The base branch of the repository
+    default: main
+    required: true
+  repo-token:
+    description: The GITHUB_TOKEN secret
+    required: true
+  # Dependency parser options
+  # TODO
+runs:
+  using: node20
+  main: 'dist/dp/src/main-unattended.js'

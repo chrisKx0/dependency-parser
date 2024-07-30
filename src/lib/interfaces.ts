@@ -1,5 +1,32 @@
 import { ReleaseType } from 'semver';
 
+// array positions must be kept
+export const PACKAGE_BUNDLES = ['@nx', '@angular'];
+
+export enum ArgumentType {
+  ALL_DEPENDENCIES = 'all-dependencies',
+  FORCE_REGENERATION = 'force-regeneration',
+  INSTALL = 'install',
+  MAJOR_VERSIONS = 'major-versions',
+  MIGRATE = 'migrate',
+  MODIFY_JSON = 'modify-json',
+  PACKAGE_MANAGER = 'package-manager',
+  PATH = 'path',
+  PIN_VERSIONS = 'pin-versions',
+  PRE_RELEASE = 'pre-release',
+  RETRY = 'retry',
+  SKIP_PROMPTS = 'hide-prompts',
+}
+
+export enum State {
+  OK = 'OK',
+  CONFLICT = 'CONFLICT',
+}
+
+export interface ArgsUnattended {
+  path: string;
+}
+
 export interface ConflictState {
   result?: ResolvedPackage[] | PackageRequirement[];
   state: State;
@@ -13,9 +40,6 @@ export interface Heuristics {
   pinnedVersion?: string;
   versionRange: VersionRange;
 }
-
-// array positions must be kept
-export const PACKAGE_BUNDLES = ['@nx', '@angular'];
 
 export interface PackageDetails {
   name: string;
@@ -35,11 +59,6 @@ export interface ResolvedPackage {
   semVerInfo: string;
 }
 
-export enum State {
-  OK = 'OK',
-  CONFLICT = 'CONFLICT',
-}
-
 export interface Versions {
   versions: string[];
   meanSize: number;
@@ -48,19 +67,4 @@ export interface Versions {
 export interface VersionRange {
   type: ReleaseType;
   value: number;
-}
-
-export enum ArgumentType {
-  ALL_DEPENDENCIES = 'all-dependencies',
-  FORCE_REGENERATION = 'force-regeneration',
-  INSTALL = 'install',
-  MAJOR_VERSIONS = 'major-versions',
-  MIGRATE = 'migrate',
-  MODIFY_JSON = 'modify-json',
-  PACKAGE_MANAGER = 'package-manager',
-  PATH = 'path',
-  PIN_VERSIONS = 'pin-versions',
-  PRE_RELEASE = 'pre-release',
-  RETRY = 'retry',
-  SKIP_PROMPTS = 'hide-prompts',
 }

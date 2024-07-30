@@ -25,7 +25,7 @@ export async function promptQuestion<T extends PackageManager | number | boolean
       name: 'value',
       ...question,
       choices: question.type === 'list' || question.type === 'checkbox' ? choices : null,
-      default: question.type === 'checkbox' ? defaults : null,
+      default: question.type === 'checkbox' ? defaults : question.default,
     },
   ]);
   console.log();
