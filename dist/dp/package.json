@@ -54,7 +54,7 @@
     "vitest": "~0.34.6"
   },
   "type": "commonjs",
-  "main": "src/main-unattended.ts",
+  "main": "./src/main-unattended.js",
   "typings": "./src/main-unattended.d.ts",
   "bin": {
     "dp": "./dist/dp/src/main-interactive.js"

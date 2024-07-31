@@ -1,0 +1,308 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.Evaluator = void 0;
+const tslib_1 = require("tslib");
+const compare_versions_1 = require("compare-versions");
+const fs = tslib_1.__importStar(require("fs"));
+const process = tslib_1.__importStar(require("process"));
+const interfaces_1 = require("./interfaces");
+const registry_client_1 = require("./registry-client");
+const semver_1 = require("semver");
+// TODO: very slow in dp repository -> check for loop or error
+// TODO: Possible Error: Invalid argument not valid semver ('*' received)
+// TODO: check if pinned versions of all direct dependencies should be included in result, not only the resolved ones
+function isArgumentsCamelCase(args) {
+    return !!args._;
+}
+class Evaluator {
+    constructor(allowedMajorVersions = 2, allowPreReleases = false, pinVersions = false, forceRegeneration = false) {
+        this.allowedMajorVersions = allowedMajorVersions;
+        this.allowPreReleases = allowPreReleases;
+        this.pinVersions = pinVersions;
+        this.forceRegeneration = forceRegeneration;
+        this.client = new registry_client_1.RegistryClient();
+        this.heuristics = {};
+        this.sortByHeuristics = (pr1, pr2) => {
+            var _a, _b;
+            const heuristics1 = this.heuristics[pr1.name]; // negative value prioritizes pr1
+            const heuristics2 = this.heuristics[pr2.name]; // positive value prioritizes pr2
+            // direct dependencies
+            if (heuristics1.isDirectDependency || heuristics2.isDirectDependency) {
+                if (!heuristics2.isDirectDependency) {
+                    return 1;
+                }
+                else if (!heuristics1.isDirectDependency) {
+                    return -1;
+                }
+                const hasPeer1 = (_a = heuristics1.peers) === null || _a === void 0 ? void 0 : _a.includes(pr2.name);
+                const hasPeer2 = (_b = heuristics2.peers) === null || _b === void 0 ? void 0 : _b.includes(pr1.name);
+                if (!hasPeer1 && hasPeer2) {
+                    return 1;
+                }
+                else if (hasPeer1 && !hasPeer2) {
+                    return -1;
+                }
+            }
+            // conflict potential
+            if (heuristics1.conflictPotential > heuristics2.conflictPotential) {
+                return 1;
+            }
+            else if (heuristics1.conflictPotential < heuristics2.conflictPotential) {
+                return -1;
+            }
+            // version range
+            if (heuristics1.versionRange.type === heuristics2.versionRange.type) {
+                if (heuristics1.versionRange.value === heuristics1.versionRange.value) {
+                    // size
+                    return heuristics1.meanSize - heuristics2.meanSize;
+                }
+                return heuristics1.versionRange.value - heuristics2.versionRange.value;
+            }
+            else {
+                if (heuristics1.versionRange.type.endsWith('major') || heuristics2.versionRange.type.endsWith('patch')) {
+                    return 1;
+                }
+                return -1;
+            }
+        };
+    }
+    prepare(args) {
+        var _a;
+        return tslib_1.__awaiter(this, void 0, void 0, function* () {
+            // get package.json path from args or current working directory & add filename if necessary
+            const path = ((_a = args[interfaces_1.ArgumentType.PATH]) !== null && _a !== void 0 ? _a : process.cwd()) + '/package.json';
+            // read package.json to retrieve dependencies and peer dependencies
+            const packageJson = JSON.parse(fs.readFileSync(path, { encoding: 'utf8' }));
+            const openRequirements = [
+                ...(packageJson.peerDependencies
+                    ? Object.keys(packageJson.peerDependencies).map((name) => ({
+                        name,
+                        peer: true,
+                    }))
+                    : []),
+                ...(packageJson.dependencies
+                    ? Object.keys(packageJson.dependencies).map((name) => ({
+                        name,
+                        peer: true, // TODO: check if truthy peer is alright for "normal" dependencies
+                    }))
+                    : []),
+            ];
+            this.directDependencies = openRequirements.map((pr) => pr.name);
+            // load cache from disk
+            this.client.readDataFromFiles(this.forceRegeneration);
+            // get pinned version from command or package.json
+            const pinnedVersions = isArgumentsCamelCase(args)
+                ? yield this.getPinnedVersions(args._, Object.assign(Object.assign({}, packageJson.dependencies), packageJson.peerDependencies))
+                : {};
+            // add heuristics for direct dependencies & pinned versions
+            for (const { name } of openRequirements) {
+                yield this.createHeuristics(name, pinnedVersions[name], true);
+            }
+            for (const [name, pinnedVersion] of Object.entries(pinnedVersions)) {
+                yield this.createHeuristics(name, pinnedVersion);
+                // add missing pinned versions to open requirements --> packages the user explicitly installs
+                const openRequirement = openRequirements.find((pr) => pr.name === name);
+                if (openRequirement) {
+                    openRequirement.versionRequirement = pinnedVersion;
+                }
+                else {
+                    openRequirements.push({ name, peer: false, versionRequirement: pinnedVersion });
+                }
+                // edit bundled packages to also be of the same version
+                openRequirements
+                    .filter((pr) => interfaces_1.PACKAGE_BUNDLES.some((pb) => pr.name.startsWith(pb) && name.startsWith(pb)))
+                    .forEach((pr) => (pr.versionRequirement = pinnedVersion));
+            }
+            // sort direct dependencies by heuristics
+            openRequirements.sort(this.sortByHeuristics);
+            // save cache to disk
+            this.client.writeDataToFiles();
+            return openRequirements;
+        });
+    }
+    evaluate(openRequirements) {
+        return tslib_1.__awaiter(this, void 0, void 0, function* () {
+            const result = yield this.evaluationStep([], [], openRequirements);
+            // save cache to disk
+            this.client.writeDataToFiles();
+            return result;
+        });
+    }
+    evaluationStep(selectedPackageVersions, closedRequirements, openRequirements) {
+        var _a, _b;
+        return tslib_1.__awaiter(this, void 0, void 0, function* () {
+            if (openRequirements.length) {
+                const currentRequirement = openRequirements.shift();
+                let version = (_a = selectedPackageVersions.find((rp) => rp.name === currentRequirement.name)) === null || _a === void 0 ? void 0 : _a.semVerInfo;
+                if (!version) {
+                    // bundled packages need to be of the same version
+                    version = (_b = selectedPackageVersions.find((rp) => interfaces_1.PACKAGE_BUNDLES.some((pb) => rp.name.startsWith(pb) && currentRequirement.name.startsWith(pb)))) === null || _b === void 0 ? void 0 : _b.semVerInfo;
+                }
+                let availableVersions;
+                if (version) {
+                    availableVersions = [version];
+                }
+                else {
+                    const allVersions = (yield this.client.getAllVersionsFromRegistry(currentRequirement.name)).versions
+                        .sort(compare_versions_1.compareVersions)
+                        .reverse();
+                    const pinnedVersion = this.heuristics[currentRequirement.name].pinnedVersion;
+                    availableVersions = allVersions.length
+                        ? allVersions.filter((v) => (0, compare_versions_1.compareVersions)(v, Math.max((0, semver_1.major)(allVersions[0]) - this.allowedMajorVersions, 0).toString()) !== -1 &&
+                            (this.allowPreReleases || !v.includes('-')))
+                        : allVersions;
+                    if ((0, semver_1.validRange)(pinnedVersion)) {
+                        availableVersions = availableVersions.filter((v) => (0, compare_versions_1.satisfies)(v, pinnedVersion));
+                    }
+                }
+                const compatibleVersions = currentRequirement.versionRequirement
+                    ? availableVersions.filter((v) => (0, compare_versions_1.satisfies)(v, currentRequirement.versionRequirement.replace('ˆ', '^')))
+                    : availableVersions;
+                let conflictState = { state: interfaces_1.State.CONFLICT };
+                for (const versionToExplore of compatibleVersions) {
+                    if (conflictState.state === interfaces_1.State.CONFLICT) {
+                        const packageDetails = yield this.client.getPackageDetails(currentRequirement.name, versionToExplore);
+                        if (packageDetails.peerDependencies) {
+                            this.heuristics[currentRequirement.name].peers = Object.keys(packageDetails.peerDependencies).filter((peer) => this.directDependencies.includes(peer));
+                        }
+                        conflictState = yield this.evaluationStep(currentRequirement.peer &&
+                            !selectedPackageVersions.some((rp) => rp.name === packageDetails.name && rp.semVerInfo === packageDetails.version)
+                            ? [...selectedPackageVersions, { name: packageDetails.name, semVerInfo: packageDetails.version }]
+                            : selectedPackageVersions, [...closedRequirements, currentRequirement], yield this.addDependenciesToOpenSet(packageDetails, closedRequirements, openRequirements));
+                    }
+                }
+                if (conflictState.state === interfaces_1.State.CONFLICT) {
+                    this.heuristics[currentRequirement.name].conflictPotential++;
+                }
+                return conflictState;
+            }
+            else {
+                return { result: selectedPackageVersions, state: interfaces_1.State.OK };
+            }
+        });
+    }
+    addDependenciesToOpenSet(packageDetails, closedRequirements, openRequirements) {
+        return tslib_1.__awaiter(this, void 0, void 0, function* () {
+            const newOpenRequirements = [...openRequirements];
+            const newRequirements = [
+                ...(packageDetails.peerDependencies
+                    ? Object.entries(packageDetails.peerDependencies).map(([name, versionRequirement]) => ({
+                        name,
+                        versionRequirement,
+                        peer: true,
+                    }))
+                    : []),
+                ...(packageDetails.dependencies
+                    ? Object.entries(packageDetails.dependencies).map(([name, versionRequirement]) => ({
+                        name,
+                        versionRequirement,
+                        peer: false,
+                    }))
+                    : []),
+            ];
+            // add requirements to open requirements if needed & create heuristics if none exist
+            for (const newRequirement of newRequirements) {
+                if (!newOpenRequirements.some((pr) => pr.name === newRequirement.name && pr.versionRequirement === newRequirement.versionRequirement) &&
+                    !closedRequirements.some((pr) => pr.name === newRequirement.name && pr.versionRequirement === newRequirement.versionRequirement)) {
+                    newOpenRequirements.push(newRequirement);
+                    yield this.createHeuristics(newRequirement.name, newRequirement.versionRequirement);
+                }
+            }
+            // sort new dependencies by heuristics
+            newOpenRequirements.sort(this.sortByHeuristics);
+            return newOpenRequirements;
+        });
+    }
+    createHeuristics(name, pinnedVersion, isDirectDependency = false) {
+        return tslib_1.__awaiter(this, void 0, void 0, function* () {
+            if (!this.heuristics[name]) {
+                const { versions, meanSize } = yield this.client.getAllVersionsFromRegistry(name);
+                versions.sort(compare_versions_1.compareVersions).reverse();
+                versions.filter((v) => (0, compare_versions_1.compareVersions)(v, Math.max((0, semver_1.major)(versions[0]) - this.allowedMajorVersions, 0).toString()) !== -1 &&
+                    (this.allowPreReleases || !v.includes('-')));
+                // peers heuristic
+                const versionsForPeers = pinnedVersion ? versions.filter((v) => (0, compare_versions_1.satisfies)(v, pinnedVersion)) : versions;
+                const peers = [];
+                for (const version of versionsForPeers) {
+                    const { peerDependencies } = yield this.client.getPackageDetails(name, version);
+                    if (peerDependencies) {
+                        for (const peerDependency of Object.keys(peerDependencies)) {
+                            if (!peers.includes(peerDependency) && this.directDependencies.includes(peerDependency)) {
+                                peers.push(peerDependency);
+                            }
+                        }
+                    }
+                }
+                this.heuristics[name] = {
+                    conflictPotential: 0,
+                    isDirectDependency,
+                    meanSize,
+                    peers,
+                    pinnedVersion,
+                    versionRange: this.getRangeBetweenVersions(versions[0], versions[versions.length - 1]),
+                };
+            }
+        });
+    }
+    getRangeBetweenVersions(v1, v2) {
+        let type = (0, semver_1.diff)(v1, v2);
+        let value;
+        switch (type) {
+            case 'major':
+            case 'premajor':
+                value = (0, semver_1.major)(v1) - (0, semver_1.major)(v2);
+                type = 'major';
+                break;
+            case 'minor':
+            case 'preminor':
+                value = (0, semver_1.minor)(v1) - (0, semver_1.minor)(v2);
+                type = 'minor';
+                break;
+            default:
+                value = (0, semver_1.patch)(v1) - (0, semver_1.patch)(v2);
+                type = 'patch';
+                break;
+        }
+        return { type, value: Math.abs(value) };
+    }
+    getPinnedVersions(params, dependencies) {
+        return tslib_1.__awaiter(this, void 0, void 0, function* () {
+            const pinnedVersions = {};
+            let pinPackageJsonVersions = false;
+            const command = params.shift();
+            if (command === 'i' || command === 'install') {
+                if (params.length) {
+                    // get versions from params
+                    for (const param of params) {
+                        if (typeof param === 'number') {
+                            continue;
+                        }
+                        const paramSplit = param.split(/(?<!^)@/);
+                        const name = paramSplit.shift();
+                        if (!paramSplit.length) {
+                            const versions = (yield this.client.getAllVersionsFromRegistry(name)).versions
+                                .filter((v) => this.allowPreReleases || !v.includes('-'))
+                                .sort(compare_versions_1.compareVersions)
+                                .reverse();
+                            pinnedVersions[name] = versions[0];
+                        }
+                        else {
+                            pinnedVersions[name] = paramSplit.shift();
+                        }
+                    }
+                    return pinnedVersions;
+                }
+                pinPackageJsonVersions = true;
+            }
+            if (pinPackageJsonVersions || this.pinVersions) {
+                // get versions from dependencies
+                Object.entries(dependencies)
+                    .filter(([name]) => !pinnedVersions[name])
+                    .forEach(([name, version]) => (pinnedVersions[name] = version));
+            }
+            return pinnedVersions;
+        });
+    }
+}
+exports.Evaluator = Evaluator;
+//# sourceMappingURL=evaluator.js.map
