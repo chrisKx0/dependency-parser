@@ -15,8 +15,8 @@
       "executor": "@nx/js:tsc",
       "outputs": ["{options.outputPath}"],
       "options": {
-        "outputPath": "dist/dp",
-        "main": "./src/main-unattended.ts",
+        "outputPath": "dist/interactive",
+        "main": "./src/main-interactive.ts",
         "tsConfig": "./tsconfig.lib.json",
         "assets": ["data/*"]
       }

@@ -14,4 +14,4 @@ inputs:
   # TODO
 runs:
   using: node20
-  main: 'dist/dp/src/main-unattended.js'
+  main: 'dist/unattended/index.js'
