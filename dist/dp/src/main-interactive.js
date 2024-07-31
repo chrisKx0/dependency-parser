@@ -1,10 +1,21 @@
 #!/usr/bin/env node
 "use strict";
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-const tslib_1 = require("tslib");
 const clui_1 = require("clui");
 const lodash_1 = require("lodash");
-const yargs_1 = tslib_1.__importDefault(require("yargs"));
+const yargs_1 = __importDefault(require("yargs"));
 const helpers_1 = require("yargs/helpers");
 const lib_1 = require("./lib");
 function areResolvedPackages(array) {
@@ -12,7 +23,7 @@ function areResolvedPackages(array) {
 }
 function run(args) {
     var _a, _b, _c;
-    return tslib_1.__awaiter(this, void 0, void 0, function* () {
+    return __awaiter(this, void 0, void 0, function* () {
         // initial user inputs
         const showPrompts = !args[lib_1.ArgumentType.SKIP_PROMPTS];
         const allowedMajorVersions = (_a = args[lib_1.ArgumentType.MAJOR_VERSIONS]) !== null && _a !== void 0 ? _a : (!showPrompts ? 2 : (yield (0, lib_1.promptQuestion)('major_version_count')));

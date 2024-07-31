@@ -1,10 +1,41 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Evaluator = void 0;
-const tslib_1 = require("tslib");
 const compare_versions_1 = require("compare-versions");
-const fs = tslib_1.__importStar(require("fs"));
-const process = tslib_1.__importStar(require("process"));
+const fs = __importStar(require("fs"));
+const process = __importStar(require("process"));
 const interfaces_1 = require("./interfaces");
 const registry_client_1 = require("./registry-client");
 const semver_1 = require("semver");
@@ -68,7 +99,7 @@ class Evaluator {
     }
     prepare(args) {
         var _a;
-        return tslib_1.__awaiter(this, void 0, void 0, function* () {
+        return __awaiter(this, void 0, void 0, function* () {
             // get package.json path from args or current working directory & add filename if necessary
             const path = ((_a = args[interfaces_1.ArgumentType.PATH]) !== null && _a !== void 0 ? _a : process.cwd()) + '/package.json';
             // read package.json to retrieve dependencies and peer dependencies
@@ -121,7 +152,7 @@ class Evaluator {
         });
     }
     evaluate(openRequirements) {
-        return tslib_1.__awaiter(this, void 0, void 0, function* () {
+        return __awaiter(this, void 0, void 0, function* () {
             const result = yield this.evaluationStep([], [], openRequirements);
             // save cache to disk
             this.client.writeDataToFiles();
@@ -130,7 +161,7 @@ class Evaluator {
     }
     evaluationStep(selectedPackageVersions, closedRequirements, openRequirements) {
         var _a, _b;
-        return tslib_1.__awaiter(this, void 0, void 0, function* () {
+        return __awaiter(this, void 0, void 0, function* () {
             if (openRequirements.length) {
                 const currentRequirement = openRequirements.shift();
                 let version = (_a = selectedPackageVersions.find((rp) => rp.name === currentRequirement.name)) === null || _a === void 0 ? void 0 : _a.semVerInfo;
@@ -182,7 +213,7 @@ class Evaluator {
         });
     }
     addDependenciesToOpenSet(packageDetails, closedRequirements, openRequirements) {
-        return tslib_1.__awaiter(this, void 0, void 0, function* () {
+        return __awaiter(this, void 0, void 0, function* () {
             const newOpenRequirements = [...openRequirements];
             const newRequirements = [
                 ...(packageDetails.peerDependencies
@@ -214,7 +245,7 @@ class Evaluator {
         });
     }
     createHeuristics(name, pinnedVersion, isDirectDependency = false) {
-        return tslib_1.__awaiter(this, void 0, void 0, function* () {
+        return __awaiter(this, void 0, void 0, function* () {
             if (!this.heuristics[name]) {
                 const { versions, meanSize } = yield this.client.getAllVersionsFromRegistry(name);
                 versions.sort(compare_versions_1.compareVersions).reverse();
@@ -266,7 +297,7 @@ class Evaluator {
         return { type, value: Math.abs(value) };
     }
     getPinnedVersions(params, dependencies) {
-        return tslib_1.__awaiter(this, void 0, void 0, function* () {
+        return __awaiter(this, void 0, void 0, function* () {
             const pinnedVersions = {};
             let pinPackageJsonVersions = false;
             const command = params.shift();

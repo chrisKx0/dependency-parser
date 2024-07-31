@@ -1,11 +1,22 @@
 "use strict";
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.createMessage = exports.createResolvedPackageOutput = exports.createOpenRequirementOutput = exports.promptQuestion = exports.Severity = void 0;
-const tslib_1 = require("tslib");
-const chalk_1 = tslib_1.__importDefault(require("chalk"));
-const inquirer_1 = tslib_1.__importDefault(require("inquirer"));
-const messages_json_1 = tslib_1.__importDefault(require("./data/messages.json"));
-const questions_json_1 = tslib_1.__importDefault(require("./data/questions.json"));
+const chalk_1 = __importDefault(require("chalk"));
+const inquirer_1 = __importDefault(require("inquirer"));
+const messages_json_1 = __importDefault(require("./data/messages.json"));
+const questions_json_1 = __importDefault(require("./data/questions.json"));
 const lodash_1 = require("lodash");
 var Severity;
 (function (Severity) {
@@ -15,7 +26,7 @@ var Severity;
     Severity["ERROR"] = "error";
 })(Severity || (exports.Severity = Severity = {}));
 function promptQuestion(key, choices, defaults) {
-    return tslib_1.__awaiter(this, void 0, void 0, function* () {
+    return __awaiter(this, void 0, void 0, function* () {
         const question = questions_json_1.default[key];
         console.assert(question, `Question with key ${key} doesn't exist!`);
         const answer = yield inquirer_1.default.prompt([
