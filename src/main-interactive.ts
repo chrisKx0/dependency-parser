@@ -48,7 +48,7 @@ async function run(args: ArgumentsCamelCase) {
   spinner.start();
 
   let openRequirements = await evaluator.prepare(args);
-  console.log(showPrompts, allowedMajorVersions);
+
   spinner.stop();
 
   // let user choose the packages he likes to include in package resolution

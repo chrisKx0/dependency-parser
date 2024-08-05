@@ -29,7 +29,6 @@ function run(args) {
         let spinner = new clui_1.Spinner('Preparing dependency resolution...');
         spinner.start();
         let openRequirements = yield evaluator.prepare(args);
-        console.log(showPrompts, allowedMajorVersions);
         spinner.stop();
         // let user choose the packages he likes to include in package resolution
         if (showPrompts && !args[lib_1.ArgumentType.ALL_DEPENDENCIES]) {

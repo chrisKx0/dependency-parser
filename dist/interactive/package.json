@@ -4,7 +4,7 @@
   "license": "MIT",
   "author": "Christian Knauf",
   "scripts": {
-    "build": "nx build && git add -f dist && npm i -g .",
+    "build": "nx build && npm i -g ./dist/interactive",
     "package-interactive": "ncc build src/main-interactive.ts -o dist/interactive --source-map",
     "package-unattended": "ncc build src/main-unattended.ts -o dist/unattended --source-map",
     "release": "nx run build && nx run package-unattended && git add -f dist/"
@@ -57,7 +57,7 @@
   "main": "./src/main-interactive.js",
   "typings": "./src/main-unattended.d.ts",
   "bin": {
-    "dp": "./dist/dp/src/main-interactive.js"
+    "dp": "./src/main-interactive.js"
   },
   "packageManager": "pnpm@9.3.0+sha512.ee7b93e0c2bd11409c6424f92b866f31d3ea1bef5fbe47d3c7500cdc3c9668833d2e55681ad66df5b640c61fa9dc25d546efa54d76d7f8bf54b13614ac293631",
   "engines": {
