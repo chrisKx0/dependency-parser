@@ -3,11 +3,15 @@ import { PackageManager } from 'nx/src/utils/package-manager';
 import { NxJsonConfiguration } from 'nx/src/config/nx-json';
 import { lockFileExists } from 'nx/src/plugins/js/lock-file/lock-file';
 
-import { ResolvedPackage } from './interfaces';
+import { PackageRequirement, ResolvedPackage } from './interfaces';
 import { PackageJson } from 'nx/src/utils/package-json';
 import { execSync } from 'child_process';
 import { validate } from 'compare-versions';
 import { createMessage, Severity } from './user-interactions';
+
+export function areResolvedPackages(array: ResolvedPackage[] | PackageRequirement[]): array is ResolvedPackage[] {
+  return Array.isArray(array) && (!array.length || !!(array[0] as ResolvedPackage).semVerInfo);
+}
 
 export class Installer {
   // TODO: add different error types that can be caught in main that messages get created there -> only needed when ALL messages should be hidden in unattended

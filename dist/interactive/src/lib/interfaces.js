@@ -9,6 +9,7 @@ var ArgumentType;
     ArgumentType["FORCE_REGENERATION"] = "force-regeneration";
     ArgumentType["INSTALL"] = "install";
     ArgumentType["MAJOR_VERSIONS"] = "major-versions";
+    ArgumentType["MINOR_VERSIONS"] = "minor-versions";
     ArgumentType["MIGRATE"] = "migrate";
     ArgumentType["MODIFY_JSON"] = "modify-json";
     ArgumentType["PACKAGE_MANAGER"] = "package-manager";

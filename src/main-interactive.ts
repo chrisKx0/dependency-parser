@@ -9,8 +9,6 @@ import {
   ArgumentType,
   ConflictState,
   PACKAGE_BUNDLES,
-  PackageRequirement,
-  ResolvedPackage,
   State,
   Evaluator,
   Installer,
@@ -19,17 +17,16 @@ import {
   createResolvedPackageOutput,
   promptQuestion,
   Severity,
+  areResolvedPackages,
 } from './lib';
-
-function areResolvedPackages(array: ResolvedPackage[] | PackageRequirement[]): array is ResolvedPackage[] {
-  return Array.isArray(array) && (!array.length || !!(array[0] as ResolvedPackage).semVerInfo);
-}
 
 async function run(args: ArgumentsCamelCase) {
   // initial user inputs
   const showPrompts = !args[ArgumentType.SKIP_PROMPTS];
   const allowedMajorVersions =
-    (args[ArgumentType.MAJOR_VERSIONS] as number) ?? (!showPrompts ? 2 : (await promptQuestion<number>('major_version_count')));
+    (args[ArgumentType.MAJOR_VERSIONS] as number) ?? (!showPrompts ? 2 : await promptQuestion<number>('major_version_count'));
+  const allowedMinorAndPatchVersions =
+    (args[ArgumentType.MINOR_VERSIONS] as number) ?? (!showPrompts ? 10 : await promptQuestion<number>('minor_version_count'));
   const allowPreReleases =
     args[ArgumentType.PRE_RELEASE] != null
       ? !!args[ArgumentType.PRE_RELEASE]
@@ -41,7 +38,7 @@ async function run(args: ArgumentsCamelCase) {
   const forceRegeneration = !!args[ArgumentType.FORCE_REGENERATION];
 
   // initialize evaluator
-  const evaluator = new Evaluator(allowedMajorVersions, allowPreReleases, pinVersions, forceRegeneration);
+  const evaluator = new Evaluator(allowedMajorVersions, allowedMinorAndPatchVersions, allowPreReleases, pinVersions, forceRegeneration);
 
   // show spinner during preparation
   let spinner = new Spinner('Preparing dependency resolution...');
@@ -173,6 +170,11 @@ yargs(hideBin(process.argv))
     number: true,
     description: 'Number of major versions allowed to downgrade',
   })
+  .option(ArgumentType.MINOR_VERSIONS, {
+    type: 'number',
+    number: true,
+    description: 'Number of minor and patch versions allowed per major version',
+  })
   .option(ArgumentType.MIGRATE, {
     alias: 'm',
     type: 'boolean',
@@ -218,6 +220,6 @@ yargs(hideBin(process.argv))
     alias: 's',
     type: 'boolean',
     boolean: true,
-    description: 'Disable all user prompts and outputs',
+    description: 'Disable all user prompts',
   })
   .parse();

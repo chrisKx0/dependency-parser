@@ -8,25 +8,25 @@ const path = tslib_1.__importStar(require("path"));
 const lib_1 = require("./lib");
 function run(context) {
     return tslib_1.__awaiter(this, void 0, void 0, function* () {
-        // get local path of github workspace and path of the repository
+        // get paths of github workspace, the repository and the package.json file inside the workspace
         const workspaceRoot = process.env.GITHUB_WORKSPACE || '';
         const repoToken = core.getInput('repo-token');
         const repoPath = `https://${repoToken}@github.com/${context.repo.owner}/${context.repo.repo}.git`;
+        const packageJsonPath = path.normalize(path.join(workspaceRoot, core.getInput('package-json-path')));
         // clone git repository
         const gitClient = new lib_1.GitClient(workspaceRoot);
         yield gitClient.clone(repoPath);
-        // TODO: add outputs to visualize action progress
         // initialize evaluator
         const allowedMajorVersions = parseInt(core.getInput('allowed-major-versions', { trimWhitespace: true })) || 2;
+        const allowedMinorAndPatchVersions = parseInt(core.getInput('allowed-minor-versions', { trimWhitespace: true })) || 10;
         const allowPreReleases = core.getInput('allow-pre-releases', { trimWhitespace: true }) === 'true';
         const pinVersions = core.getInput('pin-versions', { trimWhitespace: true }) === 'true';
-        const evaluator = new lib_1.Evaluator(allowedMajorVersions, allowPreReleases, pinVersions);
+        const evaluator = new lib_1.Evaluator(allowedMajorVersions, allowedMinorAndPatchVersions, allowPreReleases, pinVersions);
         core.info('Preparing dependency resolution...');
-        const packageJsonPath = path.normalize(path.join(workspaceRoot, core.getInput('package-json-path')));
-        core.debug(packageJsonPath);
-        // run evaluation
+        // run preparation
         const openRequirements = yield evaluator.prepare({ path: packageJsonPath });
         core.info('Performing dependency resolution...');
+        // run evaluation
         let conflictState;
         try {
             conflictState = yield evaluator.evaluate(openRequirements);
@@ -34,8 +34,13 @@ function run(context) {
         catch (e) {
             conflictState = { state: lib_1.State.CONFLICT };
         }
+        // TODO: nicer output
         core.info(JSON.stringify(conflictState));
-        // TODO: installation
+        const installer = new lib_1.Installer();
+        if (conflictState.state === 'OK' && (0, lib_1.areResolvedPackages)(conflictState.result)) {
+            installer.updatePackageJson(conflictState.result, packageJsonPath);
+        }
+        // TODO: create branch + commit + pr
     });
 }
 exports.run = run;

@@ -8,6 +8,7 @@ const process = tslib_1.__importStar(require("process"));
 const interfaces_1 = require("./interfaces");
 const registry_client_1 = require("./registry-client");
 const semver_1 = require("semver");
+const lodash_1 = require("lodash");
 // TODO: very slow in dp repository -> check for loop or error
 // TODO: Possible Error: Invalid argument not valid semver ('*' received)
 // TODO: check if pinned versions of all direct dependencies should be included in result, not only the resolved ones
@@ -15,8 +16,9 @@ function isArgumentsCamelCase(args) {
     return !!args._;
 }
 class Evaluator {
-    constructor(allowedMajorVersions = 2, allowPreReleases = false, pinVersions = false, forceRegeneration = false) {
+    constructor(allowedMajorVersions = 2, allowedMinorAndPatchVersions = 10, allowPreReleases = false, pinVersions = false, forceRegeneration = false) {
         this.allowedMajorVersions = allowedMajorVersions;
+        this.allowedMinorAndPatchVersions = allowedMinorAndPatchVersions;
         this.allowPreReleases = allowPreReleases;
         this.pinVersions = pinVersions;
         this.forceRegeneration = forceRegeneration;
@@ -83,7 +85,7 @@ class Evaluator {
                 ...(packageJson.dependencies
                     ? Object.keys(packageJson.dependencies).map((name) => ({
                         name,
-                        peer: true, // TODO: check if truthy peer is alright for "normal" dependencies
+                        peer: true, // TODO: check if truthy peers are alright for "normal" dependencies
                     }))
                     : []),
             ];
@@ -217,11 +219,16 @@ class Evaluator {
         return tslib_1.__awaiter(this, void 0, void 0, function* () {
             if (!this.heuristics[name]) {
                 const { versions, meanSize } = yield this.client.getAllVersionsFromRegistry(name);
-                versions.sort(compare_versions_1.compareVersions).reverse();
-                versions.filter((v) => (0, compare_versions_1.compareVersions)(v, Math.max((0, semver_1.major)(versions[0]) - this.allowedMajorVersions, 0).toString()) !== -1 &&
-                    (this.allowPreReleases || !v.includes('-')));
+                versions.sort(compare_versions_1.compareVersions);
+                versions.reverse();
+                // use a version as reference that is in the expected range
+                const versionReference = this.getVersionReference(versions, semver_1.major);
+                let versionsForPeers = versions.filter((v) => (0, semver_1.major)(v) <= (0, semver_1.major)(versionReference) && // version should be below the reference
+                    (0, compare_versions_1.compareVersions)(v, Math.max((0, semver_1.major)(versionReference) - this.allowedMajorVersions, 0).toString()) !== -1 &&
+                    (this.allowPreReleases || !v.includes('-')) &&
+                    (!pinnedVersion || (0, compare_versions_1.satisfies)(v, pinnedVersion)));
+                versionsForPeers = this.getVersionsInMinorAndPatchRange(versionsForPeers);
                 // peers heuristic
-                const versionsForPeers = pinnedVersion ? versions.filter((v) => (0, compare_versions_1.satisfies)(v, pinnedVersion)) : versions;
                 const peers = [];
                 for (const version of versionsForPeers) {
                     const { peerDependencies } = yield this.client.getPackageDetails(name, version);
@@ -243,6 +250,18 @@ class Evaluator {
                 };
             }
         });
+    }
+    getVersionReference(versions, func) {
+        return versions.find((version, idx, array) => func(version) - (array[idx + 1] ? func(array[idx + 1]) : 0) <= 1);
+    }
+    getVersionsInMinorAndPatchRange(versions) {
+        const result = [];
+        const majorVersions = (0, lodash_1.uniq)(versions.map((v) => (0, semver_1.major)(v)));
+        for (const majorVersion of majorVersions) {
+            const currentVersions = versions.filter((v) => (0, semver_1.major)(v) === majorVersion);
+            result.push(...currentVersions.slice(0, this.allowedMinorAndPatchVersions));
+        }
+        return result;
     }
     getRangeBetweenVersions(v1, v2) {
         let type = (0, semver_1.diff)(v1, v2);

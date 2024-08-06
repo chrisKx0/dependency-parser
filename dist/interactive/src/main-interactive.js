@@ -7,15 +7,13 @@ const lodash_1 = require("lodash");
 const yargs_1 = tslib_1.__importDefault(require("yargs"));
 const helpers_1 = require("yargs/helpers");
 const lib_1 = require("./lib");
-function areResolvedPackages(array) {
-    return Array.isArray(array) && (!array.length || !!array[0].semVerInfo);
-}
 function run(args) {
-    var _a, _b, _c;
+    var _a, _b, _c, _d;
     return tslib_1.__awaiter(this, void 0, void 0, function* () {
         // initial user inputs
         const showPrompts = !args[lib_1.ArgumentType.SKIP_PROMPTS];
-        const allowedMajorVersions = (_a = args[lib_1.ArgumentType.MAJOR_VERSIONS]) !== null && _a !== void 0 ? _a : (!showPrompts ? 2 : (yield (0, lib_1.promptQuestion)('major_version_count')));
+        const allowedMajorVersions = (_a = args[lib_1.ArgumentType.MAJOR_VERSIONS]) !== null && _a !== void 0 ? _a : (!showPrompts ? 2 : yield (0, lib_1.promptQuestion)('major_version_count'));
+        const allowedMinorAndPatchVersions = (_b = args[lib_1.ArgumentType.MINOR_VERSIONS]) !== null && _b !== void 0 ? _b : (!showPrompts ? 10 : yield (0, lib_1.promptQuestion)('minor_version_count'));
         const allowPreReleases = args[lib_1.ArgumentType.PRE_RELEASE] != null
             ? !!args[lib_1.ArgumentType.PRE_RELEASE]
             : showPrompts && (yield (0, lib_1.promptQuestion)('allow_pre_releases'));
@@ -24,7 +22,7 @@ function run(args) {
             : showPrompts && (yield (0, lib_1.promptQuestion)('pin_versions'));
         const forceRegeneration = !!args[lib_1.ArgumentType.FORCE_REGENERATION];
         // initialize evaluator
-        const evaluator = new lib_1.Evaluator(allowedMajorVersions, allowPreReleases, pinVersions, forceRegeneration);
+        const evaluator = new lib_1.Evaluator(allowedMajorVersions, allowedMinorAndPatchVersions, allowPreReleases, pinVersions, forceRegeneration);
         // show spinner during preparation
         let spinner = new clui_1.Spinner('Preparing dependency resolution...');
         spinner.start();
@@ -53,10 +51,10 @@ function run(args) {
             spinner.stop();
             (0, lib_1.createMessage)(e.message, lib_1.Severity.ERROR);
         }
-        if (conflictState.state === 'OK' && areResolvedPackages(conflictState.result)) {
+        if (conflictState.state === 'OK' && (0, lib_1.areResolvedPackages)(conflictState.result)) {
             (0, lib_1.createResolvedPackageOutput)(conflictState.result);
             const installer = new lib_1.Installer();
-            const path = (_b = args[lib_1.ArgumentType.PATH]) !== null && _b !== void 0 ? _b : process.cwd();
+            const path = (_c = args[lib_1.ArgumentType.PATH]) !== null && _c !== void 0 ? _c : process.cwd();
             const packageJsonPath = path + '/package.json';
             const nxPath = path + '/nx.json';
             // ask for package.json update as user input
@@ -88,7 +86,7 @@ function run(args) {
                     ? yield (0, lib_1.promptQuestion)('choose_package_manager', (0, lodash_1.uniq)(packageManagers))
                     : packageManagers[0];
             }
-            const nxVersion = (_c = conflictState.result.find((rp) => rp.name.startsWith(lib_1.PACKAGE_BUNDLES[0]))) === null || _c === void 0 ? void 0 : _c.semVerInfo;
+            const nxVersion = (_d = conflictState.result.find((rp) => rp.name.startsWith(lib_1.PACKAGE_BUNDLES[0]))) === null || _d === void 0 ? void 0 : _d.semVerInfo;
             const ngPackages = conflictState.result.filter((rp) => rp.name.startsWith(lib_1.PACKAGE_BUNDLES[1]));
             const runMigrations = args[lib_1.ArgumentType.MIGRATE] != null ? !!args[lib_1.ArgumentType.MIGRATE] : showPrompts && (yield (0, lib_1.promptQuestion)('run_migrations'));
             // show spinner during installation
@@ -136,6 +134,11 @@ function run(args) {
     number: true,
     description: 'Number of major versions allowed to downgrade',
 })
+    .option(lib_1.ArgumentType.MINOR_VERSIONS, {
+    type: 'number',
+    number: true,
+    description: 'Number of minor and patch versions allowed per major version',
+})
     .option(lib_1.ArgumentType.MIGRATE, {
     alias: 'm',
     type: 'boolean',
@@ -181,7 +184,7 @@ function run(args) {
     alias: 's',
     type: 'boolean',
     boolean: true,
-    description: 'Disable all user prompts and outputs',
+    description: 'Disable all user prompts',
 })
     .parse();
 //# sourceMappingURL=main-interactive.js.map

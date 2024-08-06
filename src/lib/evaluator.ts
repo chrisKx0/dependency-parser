@@ -16,7 +16,9 @@ import {
   VersionRange,
 } from './interfaces';
 import { RegistryClient } from './registry-client';
-import { diff, major, minor, patch, validRange } from 'semver';
+import { diff, major, minor, patch, SemVer, validRange } from 'semver';
+import { uniq } from 'lodash';
+import semver from 'semver/preload';
 
 // TODO: very slow in dp repository -> check for loop or error
 // TODO: Possible Error: Invalid argument not valid semver ('*' received)
@@ -33,6 +35,7 @@ export class Evaluator {
 
   constructor(
     private readonly allowedMajorVersions = 2,
+    private readonly allowedMinorAndPatchVersions = 10,
     private readonly allowPreReleases = false,
     private readonly pinVersions = false,
     private readonly forceRegeneration = false,
@@ -54,7 +57,7 @@ export class Evaluator {
       ...(packageJson.dependencies
         ? Object.keys(packageJson.dependencies).map((name) => ({
             name,
-            peer: true, // TODO: check if truthy peer is alright for "normal" dependencies
+            peer: true, // TODO: check if truthy peers are alright for "normal" dependencies
           }))
         : []),
     ];
@@ -218,15 +221,21 @@ export class Evaluator {
   private async createHeuristics(name: string, pinnedVersion?: string, isDirectDependency = false) {
     if (!this.heuristics[name]) {
       const { versions, meanSize } = await this.client.getAllVersionsFromRegistry(name);
-      versions.sort(compareVersions).reverse();
-      versions.filter(
+      versions.sort(compareVersions);
+      versions.reverse();
+
+      // use a version as reference that is in the expected range
+      const versionReference = this.getVersionReference(versions, major);
+      let versionsForPeers = versions.filter(
         (v) =>
-          compareVersions(v, Math.max(major(versions[0]) - this.allowedMajorVersions, 0).toString()) !== -1 &&
-          (this.allowPreReleases || !v.includes('-')),
+          major(v) <= major(versionReference) && // version should be below the reference
+          compareVersions(v, Math.max(major(versionReference) - this.allowedMajorVersions, 0).toString()) !== -1 &&
+          (this.allowPreReleases || !v.includes('-')) &&
+          (!pinnedVersion || satisfies(v, pinnedVersion)),
       );
+      versionsForPeers = this.getVersionsInMinorAndPatchRange(versionsForPeers);
 
       // peers heuristic
-      const versionsForPeers = pinnedVersion ? versions.filter((v) => satisfies(v, pinnedVersion)) : versions;
       const peers: string[] = [];
       for (const version of versionsForPeers) {
         const { peerDependencies } = await this.client.getPackageDetails(name, version);
@@ -248,6 +257,23 @@ export class Evaluator {
         versionRange: this.getRangeBetweenVersions(versions[0], versions[versions.length - 1]),
       };
     }
+  }
+
+  private getVersionReference(
+    versions: string[],
+    func: (version: string | SemVer, optionsOrLoose?: boolean | semver.Options) => number,
+  ): string {
+    return versions.find((version, idx, array) => func(version) - (array[idx + 1] ? func(array[idx + 1]) : 0) <= 1);
+  }
+
+  private getVersionsInMinorAndPatchRange(versions: string[]): string[] {
+    const result: string[] = [];
+    const majorVersions = uniq(versions.map((v) => major(v)));
+    for (const majorVersion of majorVersions) {
+      const currentVersions = versions.filter((v) => major(v) === majorVersion);
+      result.push(...currentVersions.slice(0, this.allowedMinorAndPatchVersions));
+    }
+    return result;
   }
 
   private sortByHeuristics = (pr1: PackageRequirement, pr2: PackageRequirement): number => {

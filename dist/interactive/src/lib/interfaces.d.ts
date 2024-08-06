@@ -5,6 +5,7 @@ export declare enum ArgumentType {
     FORCE_REGENERATION = "force-regeneration",
     INSTALL = "install",
     MAJOR_VERSIONS = "major-versions",
+    MINOR_VERSIONS = "minor-versions",
     MIGRATE = "migrate",
     MODIFY_JSON = "modify-json",
     PACKAGE_MANAGER = "package-manager",

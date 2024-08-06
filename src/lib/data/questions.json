@@ -13,6 +13,11 @@
     "type": "number",
     "default": 2
   },
+  "minor_version_count": {
+    "message": "How many minor and patch versions should be allowed per major version?",
+    "type": "number",
+    "default": 10
+  },
   "modify_package_json": {
     "message": "Modify the package.json file to depict the resolved dependency versions?",
     "type": "confirm",

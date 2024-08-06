@@ -1,12 +1,16 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.Installer = void 0;
+exports.Installer = exports.areResolvedPackages = void 0;
 const tslib_1 = require("tslib");
 const fs_1 = require("fs");
 const lock_file_1 = require("nx/src/plugins/js/lock-file/lock-file");
 const child_process_1 = require("child_process");
 const compare_versions_1 = require("compare-versions");
 const user_interactions_1 = require("./user-interactions");
+function areResolvedPackages(array) {
+    return Array.isArray(array) && (!array.length || !!array[0].semVerInfo);
+}
+exports.areResolvedPackages = areResolvedPackages;
 class Installer {
     // TODO: add different error types that can be caught in main that messages get created there -> only needed when ALL messages should be hidden in unattended
     install(packageManager, path, nxVersion, ngPackages, runMigrations = false) {

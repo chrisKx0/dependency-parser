@@ -15,7 +15,22 @@ inputs:
     default: ./
     required: true
   # Dependency parser options
-  # TODO
+  allowed-major-versions:
+    description: Number of major versions allowed to downgrade
+    default: '2'
+    required: false
+  allowed-minor-versions:
+    description: Number of minor and patch versions allowed per major version
+    default: '10'
+    required: false
+  allow-pre-releases:
+    description: Allow dependencies with pre-release versions (e.g. beta versions)
+    default: 'false'
+    required: false
+  pin-versions:
+    description: Pin the versions specified in package.json
+    default: 'false'
+    required: false
 runs:
   using: node20
   main: 'dist/unattended/index.js'
