@@ -34,12 +34,12 @@ function run(context) {
         catch (e) {
             conflictState = { state: lib_1.State.CONFLICT };
         }
-        // TODO: nicer output
+        // TODO: better output
         core.info(JSON.stringify(conflictState));
-        const installer = new lib_1.Installer();
-        if (conflictState.state === 'OK' && (0, lib_1.areResolvedPackages)(conflictState.result)) {
-            installer.updatePackageJson(conflictState.result, packageJsonPath);
-        }
+        // const installer = new Installer();
+        // if (conflictState.state === 'OK' && areResolvedPackages(conflictState.result)) {
+        //   installer.updatePackageJson(conflictState.result, packageJsonPath);
+        // }
         // TODO: create branch + commit + pr
     });
 }

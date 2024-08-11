@@ -6,7 +6,7 @@ const fs_1 = require("fs");
 const query_registry_1 = require("query-registry");
 const lodash_1 = require("lodash");
 const DETAILS_FILENAME = 'details.json';
-const VERSIONS_FILENAME = 'versions.json';
+// const VERSIONS_FILENAME = 'versions.json';
 class RegistryClient {
     constructor(details = {}, versions = {}, path = __dirname + '/../../data') {
         this.details = details;
@@ -60,20 +60,19 @@ class RegistryClient {
         catch (e) {
             // file just doesn't exist
         }
-        try {
-            const versions = (0, fs_1.readFileSync)(`${this.path}/${VERSIONS_FILENAME}`, { encoding: 'utf8' });
-            this.versions = JSON.parse(versions);
-        }
-        catch (e) {
-            // file just doesn't exist
-        }
+        // try {
+        //   const versions = readFileSync(`${this.path}/${VERSIONS_FILENAME}`, { encoding: 'utf8' });
+        //   this.versions = JSON.parse(versions);
+        // } catch (e) {
+        //   // file just doesn't exist
+        // }
     }
     writeDataToFiles() {
         if (!(0, fs_1.existsSync)(this.path)) {
             (0, fs_1.mkdirSync)(this.path);
         }
         (0, fs_1.writeFileSync)(`${this.path}/${DETAILS_FILENAME}`, JSON.stringify(this.details), { encoding: 'utf8' });
-        (0, fs_1.writeFileSync)(`${this.path}/${VERSIONS_FILENAME}`, JSON.stringify(this.versions), { encoding: 'utf8' });
+        // writeFileSync(`${this.path}/${VERSIONS_FILENAME}`, JSON.stringify(this.versions), { encoding: 'utf8' });
     }
     calculateMeanSize(sizes) {
         if (!sizes.length) {

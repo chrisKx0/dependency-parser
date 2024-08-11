@@ -20,10 +20,6 @@ import { diff, major, minor, patch, SemVer, validRange } from 'semver';
 import { uniq } from 'lodash';
 import semver from 'semver/preload';
 
-// TODO: very slow in dp repository -> check for loop or error
-// TODO: Possible Error: Invalid argument not valid semver ('*' received)
-// TODO: check if pinned versions of all direct dependencies should be included in result, not only the resolved ones
-
 function isArgumentsCamelCase(args: ArgumentsCamelCase | ArgsUnattended): args is ArgumentsCamelCase {
   return !!(args as ArgumentsCamelCase)._;
 }
@@ -57,7 +53,7 @@ export class Evaluator {
       ...(packageJson.dependencies
         ? Object.keys(packageJson.dependencies).map((name) => ({
             name,
-            peer: true, // TODO: check if truthy peers are alright for "normal" dependencies
+            peer: false, // TODO: check if peers have to be truthy or not
           }))
         : []),
     ];
@@ -127,27 +123,30 @@ export class Evaluator {
       if (version) {
         availableVersions = [version];
       } else {
-        const allVersions = (await this.client.getAllVersionsFromRegistry(currentRequirement.name)).versions
+        availableVersions = (await this.client.getAllVersionsFromRegistry(currentRequirement.name)).versions
           .sort(compareVersions)
           .reverse();
-
-        const pinnedVersion = this.heuristics[currentRequirement.name].pinnedVersion;
-
-        availableVersions = allVersions.length
-          ? allVersions.filter(
-              (v) =>
-                compareVersions(v, Math.max(major(allVersions[0]) - this.allowedMajorVersions, 0).toString()) !== -1 &&
-                (this.allowPreReleases || !v.includes('-')),
-            )
-          : allVersions;
-        if (validRange(pinnedVersion)) {
-          availableVersions = availableVersions.filter((v) => satisfies(v, pinnedVersion));
-        }
       }
 
-      const compatibleVersions = currentRequirement.versionRequirement
-        ? availableVersions.filter((v) => satisfies(v, currentRequirement.versionRequirement.replace('ˆ', '^')))
-        : availableVersions;
+      const pinnedVersion = this.heuristics[currentRequirement.name].pinnedVersion;
+      if (validRange(pinnedVersion)) {
+        availableVersions = availableVersions.filter((v) => v && satisfies(v, pinnedVersion));
+      }
+
+      const versionReference = this.getVersionReference(availableVersions, major);
+      const compatibleVersions =
+        currentRequirement.versionRequirement && currentRequirement.versionRequirement !== '*'
+          ? availableVersions.filter(
+              (v) =>
+                v && satisfies(v, currentRequirement.versionRequirement.replace('ˆ', '^')),
+            )
+          : availableVersions.filter(
+              (v) =>
+                v &&
+                major(v) <= major(versionReference) && // version should be below the reference
+                compareVersions(v, Math.max(major(versionReference) - this.allowedMajorVersions, 0).toString()) !== -1 &&
+                (this.allowPreReleases || !v.includes('-')),
+            );
 
       let conflictState: ConflictState = { state: State.CONFLICT };
 
@@ -208,7 +207,7 @@ export class Evaluator {
         !closedRequirements.some((pr) => pr.name === newRequirement.name && pr.versionRequirement === newRequirement.versionRequirement)
       ) {
         newOpenRequirements.push(newRequirement);
-        await this.createHeuristics(newRequirement.name, newRequirement.versionRequirement);
+        await this.createHeuristics(newRequirement.name);
       }
     }
 
@@ -228,6 +227,7 @@ export class Evaluator {
       const versionReference = this.getVersionReference(versions, major);
       let versionsForPeers = versions.filter(
         (v) =>
+          v &&
           major(v) <= major(versionReference) && // version should be below the reference
           compareVersions(v, Math.max(major(versionReference) - this.allowedMajorVersions, 0).toString()) !== -1 &&
           (this.allowPreReleases || !v.includes('-')) &&

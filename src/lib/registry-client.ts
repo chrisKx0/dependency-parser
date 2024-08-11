@@ -4,7 +4,7 @@ import { PackageDetails, Versions } from './interfaces';
 import { sum } from 'lodash';
 
 const DETAILS_FILENAME = 'details.json';
-const VERSIONS_FILENAME = 'versions.json';
+// const VERSIONS_FILENAME = 'versions.json';
 
 export class RegistryClient {
   constructor(
@@ -57,12 +57,12 @@ export class RegistryClient {
     } catch (e) {
       // file just doesn't exist
     }
-    try {
-      const versions = readFileSync(`${this.path}/${VERSIONS_FILENAME}`, { encoding: 'utf8' });
-      this.versions = JSON.parse(versions);
-    } catch (e) {
-      // file just doesn't exist
-    }
+    // try {
+    //   const versions = readFileSync(`${this.path}/${VERSIONS_FILENAME}`, { encoding: 'utf8' });
+    //   this.versions = JSON.parse(versions);
+    // } catch (e) {
+    //   // file just doesn't exist
+    // }
   }
 
   public writeDataToFiles() {
@@ -70,7 +70,7 @@ export class RegistryClient {
       mkdirSync(this.path);
     }
     writeFileSync(`${this.path}/${DETAILS_FILENAME}`, JSON.stringify(this.details), { encoding: 'utf8' });
-    writeFileSync(`${this.path}/${VERSIONS_FILENAME}`, JSON.stringify(this.versions), { encoding: 'utf8' });
+    // writeFileSync(`${this.path}/${VERSIONS_FILENAME}`, JSON.stringify(this.versions), { encoding: 'utf8' });
   }
 
   private calculateMeanSize(sizes: number[]): number {
