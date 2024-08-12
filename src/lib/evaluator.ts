@@ -134,7 +134,7 @@ export class Evaluator {
       }
 
       const versionReference = this.getVersionReference(availableVersions, major);
-      const compatibleVersions =
+      let compatibleVersions =
         currentRequirement.versionRequirement && currentRequirement.versionRequirement !== '*'
           ? availableVersions.filter(
               (v) =>
@@ -148,11 +148,16 @@ export class Evaluator {
                 (this.allowPreReleases || !v.includes('-')),
             );
 
+      compatibleVersions = this.getVersionsInMinorAndPatchRange(compatibleVersions);
+
       let conflictState: ConflictState = { state: State.CONFLICT };
 
       for (const versionToExplore of compatibleVersions) {
         if (conflictState.state === State.CONFLICT) {
           const packageDetails = await this.client.getPackageDetails(currentRequirement.name, versionToExplore);
+          if (!this.allowPreReleases && Object.values({...packageDetails.dependencies, ...packageDetails.peerDependencies }).some((d) => d.includes('-'))) {
+            continue;
+          }
           if (packageDetails.peerDependencies) {
             this.heuristics[currentRequirement.name].peers = Object.keys(packageDetails.peerDependencies).filter((peer) =>
               this.directDependencies.includes(peer),
@@ -263,7 +268,7 @@ export class Evaluator {
     versions: string[],
     func: (version: string | SemVer, optionsOrLoose?: boolean | semver.Options) => number,
   ): string {
-    return versions.find((version, idx, array) => func(version) - (array[idx + 1] ? func(array[idx + 1]) : 0) <= 1);
+    return versions.length === 1 ? versions[0] : versions.find((version, idx, array) => func(version) - (array[idx + 1] ? func(array[idx + 1]) : 0) <= 1);
   }
 
   private getVersionsInMinorAndPatchRange(versions: string[]): string[] {
@@ -305,7 +310,7 @@ export class Evaluator {
 
     // version range
     if (heuristics1.versionRange.type === heuristics2.versionRange.type) {
-      if (heuristics1.versionRange.value === heuristics1.versionRange.value) {
+      if (heuristics1.versionRange.value === heuristics2.versionRange.value) {
         // size
         return heuristics1.meanSize - heuristics2.meanSize;
       }

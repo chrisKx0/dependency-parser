@@ -10,4 +10,4 @@ jobs:
         uses: chrisKx0/dependency-parser@main
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-          package-json-path: ./files
+          allow-pre-releases: true

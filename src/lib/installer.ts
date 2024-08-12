@@ -97,14 +97,14 @@ export class Installer {
 
   public updatePackageJson(resolvedPackages: ResolvedPackage[], path: string) {
     const packageJson: PackageJson = JSON.parse(readFileSync(path, { encoding: 'utf8' }));
-    if (resolvedPackages.length && !packageJson.peerDependencies) {
-      packageJson.peerDependencies = {};
+    if (resolvedPackages.length && !packageJson.dependencies) {
+      packageJson.dependencies = {};
     }
     for (const resolvedPackage of resolvedPackages) {
-      packageJson.peerDependencies[resolvedPackage.name] = resolvedPackage.semVerInfo;
-
-      if (packageJson.dependencies?.[resolvedPackage.name]) {
-        delete packageJson.dependencies[resolvedPackage.name];
+      if (packageJson.peerDependencies?.[resolvedPackage.name]) {
+        packageJson.peerDependencies[resolvedPackage.name] = resolvedPackage.semVerInfo;
+      } else {
+        packageJson.dependencies[resolvedPackage.name] = resolvedPackage.semVerInfo;
       }
 
       if (packageJson.devDependencies?.[resolvedPackage.name]) {

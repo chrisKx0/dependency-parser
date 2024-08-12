@@ -51,7 +51,7 @@ class Evaluator {
             }
             // version range
             if (heuristics1.versionRange.type === heuristics2.versionRange.type) {
-                if (heuristics1.versionRange.value === heuristics1.versionRange.value) {
+                if (heuristics1.versionRange.value === heuristics2.versionRange.value) {
                     // size
                     return heuristics1.meanSize - heuristics2.meanSize;
                 }
@@ -151,16 +151,20 @@ class Evaluator {
                     availableVersions = availableVersions.filter((v) => v && (0, compare_versions_1.satisfies)(v, pinnedVersion));
                 }
                 const versionReference = this.getVersionReference(availableVersions, semver_1.major);
-                const compatibleVersions = currentRequirement.versionRequirement && currentRequirement.versionRequirement !== '*'
+                let compatibleVersions = currentRequirement.versionRequirement && currentRequirement.versionRequirement !== '*'
                     ? availableVersions.filter((v) => v && (0, compare_versions_1.satisfies)(v, currentRequirement.versionRequirement.replace('ˆ', '^')))
                     : availableVersions.filter((v) => v &&
                         (0, semver_1.major)(v) <= (0, semver_1.major)(versionReference) && // version should be below the reference
                         (0, compare_versions_1.compareVersions)(v, Math.max((0, semver_1.major)(versionReference) - this.allowedMajorVersions, 0).toString()) !== -1 &&
                         (this.allowPreReleases || !v.includes('-')));
+                compatibleVersions = this.getVersionsInMinorAndPatchRange(compatibleVersions);
                 let conflictState = { state: interfaces_1.State.CONFLICT };
                 for (const versionToExplore of compatibleVersions) {
                     if (conflictState.state === interfaces_1.State.CONFLICT) {
                         const packageDetails = yield this.client.getPackageDetails(currentRequirement.name, versionToExplore);
+                        if (!this.allowPreReleases && Object.values(Object.assign(Object.assign({}, packageDetails.dependencies), packageDetails.peerDependencies)).some((d) => d.includes('-'))) {
+                            continue;
+                        }
                         if (packageDetails.peerDependencies) {
                             this.heuristics[currentRequirement.name].peers = Object.keys(packageDetails.peerDependencies).filter((peer) => this.directDependencies.includes(peer));
                         }
@@ -250,7 +254,7 @@ class Evaluator {
         });
     }
     getVersionReference(versions, func) {
-        return versions.find((version, idx, array) => func(version) - (array[idx + 1] ? func(array[idx + 1]) : 0) <= 1);
+        return versions.length === 1 ? versions[0] : versions.find((version, idx, array) => func(version) - (array[idx + 1] ? func(array[idx + 1]) : 0) <= 1);
     }
     getVersionsInMinorAndPatchRange(versions) {
         const result = [];
