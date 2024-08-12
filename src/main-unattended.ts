@@ -3,7 +3,7 @@ import * as github from '@actions/github';
 import * as path from 'path';
 import { Context } from '@actions/github/lib/context';
 
-import { ConflictState, Evaluator, GitClient, State } from './lib';
+import {areResolvedPackages, ConflictState, Evaluator, GitClient, Installer, State} from './lib';
 
 export async function run(context: Context) {
   // get paths of github workspace, the repository and the package.json file inside the workspace
@@ -41,10 +41,10 @@ export async function run(context: Context) {
   // TODO: better output
   core.info(JSON.stringify(conflictState));
 
-  // const installer = new Installer();
-  // if (conflictState.state === 'OK' && areResolvedPackages(conflictState.result)) {
-  //   installer.updatePackageJson(conflictState.result, packageJsonPath);
-  // }
+  const installer = new Installer();
+  if (conflictState.state === 'OK' && areResolvedPackages(conflictState.result)) {
+    installer.updatePackageJson(conflictState.result, packageJsonPath);
+  }
 
   // TODO: create branch + commit + pr
 }
