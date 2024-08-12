@@ -12,7 +12,8 @@ inputs:
     required: true
   package-json-path:
     description: The path of the package.json file of the project to update
-    required: false
+    default: .
+    required: true
   # Dependency parser options
   allowed-major-versions:
     description: Number of major versions allowed to downgrade

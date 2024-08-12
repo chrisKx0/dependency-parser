@@ -13,7 +13,7 @@ function run() {
         const workspaceRoot = process.env.GITHUB_WORKSPACE || '';
         // const repoToken = core.getInput('repo-token');
         // const repoPath = `https://${repoToken}@github.com/${context.repo.owner}/${context.repo.repo}.git`;
-        const packageJsonPath = path.normalize(path.join(workspaceRoot, 'package.json')); // core.getInput('package-json-path')
+        const packageJsonPath = path.normalize(path.join(workspaceRoot, core.getInput('package-json-path')));
         // clone git repository
         // const gitClient = new GitClient(workspaceRoot);
         // await gitClient.clone(repoPath);
@@ -39,7 +39,7 @@ function run() {
         core.info(JSON.stringify(conflictState));
         const installer = new lib_1.Installer();
         if (conflictState.state === 'OK' && (0, lib_1.areResolvedPackages)(conflictState.result)) {
-            installer.updatePackageJson(conflictState.result, packageJsonPath);
+            installer.updatePackageJson(conflictState.result, packageJsonPath + '/package.json');
         }
         // TODO: create branch + commit + pr
     });
