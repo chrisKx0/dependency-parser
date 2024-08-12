@@ -13,8 +13,8 @@ export async function run(context: Context) {
   const packageJsonPath = path.normalize(path.join(workspaceRoot, core.getInput('package-json-path')));
 
   // clone git repository
-  const gitClient = new GitClient(workspaceRoot);
-  await gitClient.clone(repoPath);
+  // const gitClient = new GitClient(workspaceRoot);
+  // await gitClient.clone(repoPath);
 
   // initialize evaluator
   const allowedMajorVersions = parseInt(core.getInput('allowed-major-versions', { trimWhitespace: true })) || 2;
