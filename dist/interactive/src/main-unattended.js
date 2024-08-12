@@ -3,19 +3,20 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.run = void 0;
 const tslib_1 = require("tslib");
 const core = tslib_1.__importStar(require("@actions/core"));
-const github = tslib_1.__importStar(require("@actions/github"));
+// import * as github from '@actions/github';
 const path = tslib_1.__importStar(require("path"));
+// import { Context } from '@actions/github/lib/context';
 const lib_1 = require("./lib");
-function run(context) {
+function run() {
     return tslib_1.__awaiter(this, void 0, void 0, function* () {
         // get paths of github workspace, the repository and the package.json file inside the workspace
         const workspaceRoot = process.env.GITHUB_WORKSPACE || '';
-        const repoToken = core.getInput('repo-token');
-        const repoPath = `https://${repoToken}@github.com/${context.repo.owner}/${context.repo.repo}.git`;
+        // const repoToken = core.getInput('repo-token');
+        // const repoPath = `https://${repoToken}@github.com/${context.repo.owner}/${context.repo.repo}.git`;
         const packageJsonPath = path.normalize(path.join(workspaceRoot, core.getInput('package-json-path')));
         // clone git repository
-        const gitClient = new lib_1.GitClient(workspaceRoot);
-        yield gitClient.clone(repoPath);
+        // const gitClient = new GitClient(workspaceRoot);
+        // await gitClient.clone(repoPath);
         // initialize evaluator
         const allowedMajorVersions = parseInt(core.getInput('allowed-major-versions', { trimWhitespace: true })) || 2;
         const allowedMinorAndPatchVersions = parseInt(core.getInput('allowed-minor-versions', { trimWhitespace: true })) || 10;
@@ -36,13 +37,13 @@ function run(context) {
         }
         // TODO: better output
         core.info(JSON.stringify(conflictState));
-        // const installer = new Installer();
-        // if (conflictState.state === 'OK' && areResolvedPackages(conflictState.result)) {
-        //   installer.updatePackageJson(conflictState.result, packageJsonPath);
-        // }
+        const installer = new lib_1.Installer();
+        if (conflictState.state === 'OK' && (0, lib_1.areResolvedPackages)(conflictState.result)) {
+            installer.updatePackageJson(conflictState.result, packageJsonPath);
+        }
         // TODO: create branch + commit + pr
     });
 }
 exports.run = run;
-run(github.context);
+run();
 //# sourceMappingURL=main-unattended.js.map

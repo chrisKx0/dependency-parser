@@ -1,15 +1,15 @@
 import * as core from '@actions/core';
-import * as github from '@actions/github';
+// import * as github from '@actions/github';
 import * as path from 'path';
-import { Context } from '@actions/github/lib/context';
+// import { Context } from '@actions/github/lib/context';
 
-import {areResolvedPackages, ConflictState, Evaluator, GitClient, Installer, State} from './lib';
+import {areResolvedPackages, ConflictState, Evaluator, Installer, State} from './lib';
 
-export async function run(context: Context) {
+export async function run() {
   // get paths of github workspace, the repository and the package.json file inside the workspace
   const workspaceRoot = process.env.GITHUB_WORKSPACE || '';
-  const repoToken = core.getInput('repo-token');
-  const repoPath = `https://${repoToken}@github.com/${context.repo.owner}/${context.repo.repo}.git`;
+  // const repoToken = core.getInput('repo-token');
+  // const repoPath = `https://${repoToken}@github.com/${context.repo.owner}/${context.repo.repo}.git`;
   const packageJsonPath = path.normalize(path.join(workspaceRoot, core.getInput('package-json-path')));
 
   // clone git repository
@@ -49,4 +49,4 @@ export async function run(context: Context) {
   // TODO: create branch + commit + pr
 }
 
-run(github.context);
+run();
