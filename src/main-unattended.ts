@@ -10,7 +10,7 @@ export async function run() {
   const workspaceRoot = process.env.GITHUB_WORKSPACE || '';
   // const repoToken = core.getInput('repo-token');
   // const repoPath = `https://${repoToken}@github.com/${context.repo.owner}/${context.repo.repo}.git`;
-  const packageJsonPath = path.normalize(path.join(workspaceRoot, core.getInput('package-json-path')));
+  const packageJsonPath = path.normalize(path.join(workspaceRoot, 'package.json')); // core.getInput('package-json-path')
 
   // clone git repository
   // const gitClient = new GitClient(workspaceRoot);
