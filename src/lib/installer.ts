@@ -100,6 +100,7 @@ export class Installer {
     if (resolvedPackages.length && !packageJson.dependencies) {
       packageJson.dependencies = {};
     }
+    // TODO: put entries on correct positions
     for (const resolvedPackage of resolvedPackages) {
       if (packageJson.peerDependencies?.[resolvedPackage.name]) {
         packageJson.peerDependencies[resolvedPackage.name] = resolvedPackage.semVerInfo;
@@ -115,7 +116,7 @@ export class Installer {
         delete packageJson.optionalDependencies[resolvedPackage.name];
       }
     }
-    writeFileSync(path, JSON.stringify(packageJson), { encoding: 'utf8' });
+    writeFileSync(path, JSON.stringify(packageJson, null, 2), { encoding: 'utf8' });
   }
 
   private isToolInstalled(tool: PackageManager | 'ng' | 'nx') {

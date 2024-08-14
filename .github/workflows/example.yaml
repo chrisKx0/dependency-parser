@@ -1,6 +1,6 @@
 name: "Dependency Parser Example"
 on:
-  push
+  workflow_dispatch:
 
 jobs:
   parseDependencies:
@@ -23,3 +23,7 @@ jobs:
         run: pnpm install --no-frozen-lockfile
       - name: Create pull request
         uses: peter-evans/create-pull-request@v6
+        with:
+          branch: dependency-parser/peer-dependency-update
+          title: 'chore(deps): update peer dependencies'
+          body: 'Automatic update to peer dependencies by [dependency-parser] github workflow'

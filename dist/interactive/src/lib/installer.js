@@ -100,6 +100,7 @@ class Installer {
         if (resolvedPackages.length && !packageJson.dependencies) {
             packageJson.dependencies = {};
         }
+        // TODO: put entries on correct positions
         for (const resolvedPackage of resolvedPackages) {
             if ((_a = packageJson.peerDependencies) === null || _a === void 0 ? void 0 : _a[resolvedPackage.name]) {
                 packageJson.peerDependencies[resolvedPackage.name] = resolvedPackage.semVerInfo;
@@ -114,7 +115,7 @@ class Installer {
                 delete packageJson.optionalDependencies[resolvedPackage.name];
             }
         }
-        (0, fs_1.writeFileSync)(path, JSON.stringify(packageJson), { encoding: 'utf8' });
+        (0, fs_1.writeFileSync)(path, JSON.stringify(packageJson, null, 2), { encoding: 'utf8' });
     }
     isToolInstalled(tool) {
         try {
