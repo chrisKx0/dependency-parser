@@ -23,10 +23,11 @@ function run() {
         const allowPreReleases = core.getInput('allow-pre-releases', { trimWhitespace: true }) === 'true';
         const pinVersions = core.getInput('pin-versions', { trimWhitespace: true }) === 'true';
         const evaluator = new lib_1.Evaluator(allowedMajorVersions, allowedMinorAndPatchVersions, allowPreReleases, pinVersions);
-        core.info('Preparing dependency resolution...');
+        core.info('Preparing dependency resolution...\n');
         // run preparation
         const openRequirements = yield evaluator.prepare({ path: packageJsonPath });
-        core.info('Performing dependency resolution...');
+        (0, lib_1.createOpenRequirementOutput)(openRequirements, false);
+        core.info('Performing dependency resolution...\n');
         // run evaluation
         let conflictState;
         try {
@@ -35,13 +36,14 @@ function run() {
         catch (e) {
             conflictState = { state: lib_1.State.CONFLICT };
         }
-        // TODO: better output
-        core.info(JSON.stringify(conflictState));
-        const installer = new lib_1.Installer();
         if (conflictState.state === 'OK' && (0, lib_1.areResolvedPackages)(conflictState.result)) {
+            (0, lib_1.createResolvedPackageOutput)(conflictState.result, false);
+            const installer = new lib_1.Installer();
             installer.updatePackageJson(conflictState.result, packageJsonPath + '/package.json');
         }
-        // TODO: create branch + commit + pr
+        else {
+            core.error('Unable to evaluate dependencies with the provided parameters');
+        }
     });
 }
 exports.run = run;

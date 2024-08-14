@@ -10,6 +10,4 @@ export class GitClient {
   public async clone(repoPath: string) {
     await this.git.clone(repoPath, this.localPath);
   }
-
-
 }

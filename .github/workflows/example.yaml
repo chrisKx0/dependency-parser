@@ -27,3 +27,4 @@ jobs:
           branch: dependency-parser/peer-dependency-update
           title: 'chore(deps): update peer dependencies'
           body: 'Automatic update to peer dependencies by [dependency-parser] github workflow'
+          commit-message: 'chore(deps): update peer dependencies'

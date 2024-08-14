@@ -3,7 +3,15 @@ import * as core from '@actions/core';
 import * as path from 'path';
 // import { Context } from '@actions/github/lib/context';
 
-import {areResolvedPackages, ConflictState, Evaluator, Installer, State} from './lib';
+import {
+  areResolvedPackages,
+  ConflictState,
+  createOpenRequirementOutput,
+  createResolvedPackageOutput,
+  Evaluator,
+  Installer,
+  State
+} from './lib';
 
 export async function run() {
   // get paths of github workspace, the repository and the package.json file inside the workspace
@@ -23,12 +31,14 @@ export async function run() {
   const pinVersions = core.getInput('pin-versions', { trimWhitespace: true }) === 'true';
   const evaluator = new Evaluator(allowedMajorVersions, allowedMinorAndPatchVersions, allowPreReleases, pinVersions);
 
-  core.info('Preparing dependency resolution...');
+  core.info('Preparing dependency resolution...\n');
 
   // run preparation
-  const openRequirements = await evaluator.prepare({ path: packageJsonPath });
 
-  core.info('Performing dependency resolution...');
+  const openRequirements = await evaluator.prepare({ path: packageJsonPath });
+  createOpenRequirementOutput(openRequirements, false);
+
+  core.info('Performing dependency resolution...\n');
 
   // run evaluation
   let conflictState: ConflictState;
@@ -38,15 +48,13 @@ export async function run() {
     conflictState = { state: State.CONFLICT };
   }
 
-  // TODO: better output
-  core.info(JSON.stringify(conflictState));
-
-  const installer = new Installer();
   if (conflictState.state === 'OK' && areResolvedPackages(conflictState.result)) {
+    createResolvedPackageOutput(conflictState.result, false);
+    const installer = new Installer();
     installer.updatePackageJson(conflictState.result, packageJsonPath + '/package.json');
+  } else {
+    core.error('Unable to evaluate dependencies with the provided parameters')
   }
-
-  // TODO: create branch + commit + pr
 }
 
 run();

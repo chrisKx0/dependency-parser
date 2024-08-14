@@ -1,3 +1,4 @@
+import * as core from '@actions/core';
 import chalk from 'chalk';
 import inquirer, { DistinctQuestion } from 'inquirer';
 import messages from './data/messages.json';
@@ -32,26 +33,27 @@ export async function promptQuestion<T extends PackageManager | number | boolean
   return answer.value;
 }
 
-export function createOpenRequirementOutput(openRequirements: PackageRequirement[]) {
-  console.log(chalk.bold('Resolution will be executed in order for the following dependencies:\n'));
-  for (let i = 0; i < openRequirements.length; i++) {
-    const openRequirement = openRequirements[i];
-    console.log(`${chalk.green(i + 1 + ')')} ${chalk.cyan(openRequirement.name)}`);
-  }
-  console.log();
+export function createOpenRequirementOutput(openRequirements: PackageRequirement[], isInteractive = true) {
+  const titleText = 'Resolution will be executed in order for the following dependencies:\n';
+    isInteractive ? console.log(chalk.bold(titleText)) : core.info(titleText);
+    for (let i = 0; i < openRequirements.length; i++) {
+      const openRequirement = openRequirements[i];
+      isInteractive ? console.log(`${chalk.green(i + 1 + ')')} ${chalk.cyan(openRequirement.name)}`) : core.info(`${i + 1}) ${openRequirement.name}`);
+    }
+    isInteractive ? console.log() : core.info('');
 }
 
-export function createResolvedPackageOutput(resolvedPackages: ResolvedPackage[]) {
-  createMessage('resolution_success', Severity.SUCCESS);
+export function createResolvedPackageOutput(resolvedPackages: ResolvedPackage[], isInteractive = true) {
+  isInteractive ? createMessage('resolution_success', Severity.SUCCESS) : core.info(messages['resolution_success']);
   const maxLength = max(resolvedPackages.map((pr) => pr.name.length));
   for (const resolvedPackage of resolvedPackages) {
-    console.log(
+    isInteractive ? console.log(
       `${chalk.green('>>')} ${chalk.cyan(resolvedPackage.name)} ${repeat(' ', maxLength - resolvedPackage.name.length)}${chalk.gray(
         resolvedPackage.semVerInfo,
       )}`,
-    );
+    ): core.info(`>> ${resolvedPackage.name} ${repeat(' ', maxLength - resolvedPackage.name.length)}${resolvedPackage.semVerInfo}`);
   }
-  console.log();
+  isInteractive ? console.log() : core.info('');
 }
 
 export function createMessage(keyOrMessage: string, severity: Severity = Severity.INFO) {

@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.createMessage = exports.createResolvedPackageOutput = exports.createOpenRequirementOutput = exports.promptQuestion = exports.Severity = void 0;
 const tslib_1 = require("tslib");
+const core = tslib_1.__importStar(require("@actions/core"));
 const chalk_1 = tslib_1.__importDefault(require("chalk"));
 const inquirer_1 = tslib_1.__importDefault(require("inquirer"));
 const messages_json_1 = tslib_1.__importDefault(require("./data/messages.json"));
@@ -26,22 +27,23 @@ function promptQuestion(key, choices, defaults) {
     });
 }
 exports.promptQuestion = promptQuestion;
-function createOpenRequirementOutput(openRequirements) {
-    console.log(chalk_1.default.bold('Resolution will be executed in order for the following dependencies:\n'));
+function createOpenRequirementOutput(openRequirements, isInteractive = true) {
+    const titleText = 'Resolution will be executed in order for the following dependencies:\n';
+    isInteractive ? console.log(chalk_1.default.bold(titleText)) : core.info(titleText);
     for (let i = 0; i < openRequirements.length; i++) {
         const openRequirement = openRequirements[i];
-        console.log(`${chalk_1.default.green(i + 1 + ')')} ${chalk_1.default.cyan(openRequirement.name)}`);
+        isInteractive ? console.log(`${chalk_1.default.green(i + 1 + ')')} ${chalk_1.default.cyan(openRequirement.name)}`) : core.info(`${i + 1}) ${openRequirement.name}`);
     }
-    console.log();
+    isInteractive ? console.log() : core.info('');
 }
 exports.createOpenRequirementOutput = createOpenRequirementOutput;
-function createResolvedPackageOutput(resolvedPackages) {
-    createMessage('resolution_success', Severity.SUCCESS);
+function createResolvedPackageOutput(resolvedPackages, isInteractive = true) {
+    isInteractive ? createMessage('resolution_success', Severity.SUCCESS) : core.info(messages_json_1.default['resolution_success']);
     const maxLength = (0, lodash_1.max)(resolvedPackages.map((pr) => pr.name.length));
     for (const resolvedPackage of resolvedPackages) {
-        console.log(`${chalk_1.default.green('>>')} ${chalk_1.default.cyan(resolvedPackage.name)} ${(0, lodash_1.repeat)(' ', maxLength - resolvedPackage.name.length)}${chalk_1.default.gray(resolvedPackage.semVerInfo)}`);
+        isInteractive ? console.log(`${chalk_1.default.green('>>')} ${chalk_1.default.cyan(resolvedPackage.name)} ${(0, lodash_1.repeat)(' ', maxLength - resolvedPackage.name.length)}${chalk_1.default.gray(resolvedPackage.semVerInfo)}`) : core.info(`>> ${resolvedPackage.name} ${(0, lodash_1.repeat)(' ', maxLength - resolvedPackage.name.length)}${resolvedPackage.semVerInfo}`);
     }
-    console.log();
+    isInteractive ? console.log() : core.info('');
 }
 exports.createResolvedPackageOutput = createResolvedPackageOutput;
 function createMessage(keyOrMessage, severity = Severity.INFO) {

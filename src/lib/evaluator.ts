@@ -53,7 +53,7 @@ export class Evaluator {
       ...(packageJson.dependencies
         ? Object.keys(packageJson.dependencies).map((name) => ({
             name,
-            peer: false, // TODO: check if peers have to be truthy or not
+            peer: false,
           }))
         : []),
     ];

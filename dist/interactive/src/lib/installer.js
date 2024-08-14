@@ -100,7 +100,6 @@ class Installer {
         if (resolvedPackages.length && !packageJson.dependencies) {
             packageJson.dependencies = {};
         }
-        // TODO: put entries on correct positions
         for (const resolvedPackage of resolvedPackages) {
             if ((_a = packageJson.peerDependencies) === null || _a === void 0 ? void 0 : _a[resolvedPackage.name]) {
                 packageJson.peerDependencies[resolvedPackage.name] = resolvedPackage.semVerInfo;
@@ -108,6 +107,8 @@ class Installer {
             else {
                 packageJson.dependencies[resolvedPackage.name] = resolvedPackage.semVerInfo;
             }
+            // sort dependencies alphabetically before writing to file
+            packageJson.dependencies = Object.fromEntries(Object.entries(packageJson.dependencies).sort((a, b) => a[0].localeCompare(b[0])));
             if ((_b = packageJson.devDependencies) === null || _b === void 0 ? void 0 : _b[resolvedPackage.name]) {
                 delete packageJson.devDependencies[resolvedPackage.name];
             }

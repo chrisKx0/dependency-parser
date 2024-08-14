@@ -100,13 +100,18 @@ export class Installer {
     if (resolvedPackages.length && !packageJson.dependencies) {
       packageJson.dependencies = {};
     }
-    // TODO: put entries on correct positions
+
     for (const resolvedPackage of resolvedPackages) {
       if (packageJson.peerDependencies?.[resolvedPackage.name]) {
         packageJson.peerDependencies[resolvedPackage.name] = resolvedPackage.semVerInfo;
       } else {
         packageJson.dependencies[resolvedPackage.name] = resolvedPackage.semVerInfo;
       }
+
+      // sort dependencies alphabetically before writing to file
+      packageJson.dependencies = Object.fromEntries(
+        Object.entries(packageJson.dependencies).sort((a, b) => a[0].localeCompare(b[0])),
+      );
 
       if (packageJson.devDependencies?.[resolvedPackage.name]) {
         delete packageJson.devDependencies[resolvedPackage.name];
