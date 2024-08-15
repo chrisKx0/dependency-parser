@@ -30,7 +30,7 @@ The first mode of the tool is the interactive mode. It can be invoked be one of 
 
 1. **Install** command: `dp install` or `dp i` 
     - This command uses additional arguments with the pattern *name@version* of the packages/dependencies that should be installed with peer dependencies in mind.
-2. **Update** command: `dp update` or `dp u
+2. **Update** command: `dp update` or `dp u`
     - This command simply updates all packages of the project/repository to the newest version with peer dependencies in mind.
 
 When running the commands, the user is asked some questions where he can adjust the parameters of the (peer) dependency resolution process.
