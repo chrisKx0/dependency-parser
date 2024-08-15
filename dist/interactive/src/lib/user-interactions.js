@@ -28,13 +28,15 @@ function promptQuestion(key, choices, defaults) {
 }
 exports.promptQuestion = promptQuestion;
 function createOpenRequirementOutput(openRequirements, isInteractive = true) {
-    const titleText = 'Resolution will be executed in order for the following dependencies:\n';
+    const titleText = 'Resolution will be executed in order for the following dependencies:';
     isInteractive ? console.log(chalk_1.default.bold(titleText)) : core.info(titleText);
     for (let i = 0; i < openRequirements.length; i++) {
         const openRequirement = openRequirements[i];
         isInteractive ? console.log(`${chalk_1.default.green(i + 1 + ')')} ${chalk_1.default.cyan(openRequirement.name)}`) : core.info(`${i + 1}) ${openRequirement.name}`);
     }
-    isInteractive ? console.log() : core.info('');
+    if (isInteractive) {
+        console.log();
+    }
 }
 exports.createOpenRequirementOutput = createOpenRequirementOutput;
 function createResolvedPackageOutput(resolvedPackages, isInteractive = true) {
@@ -43,7 +45,9 @@ function createResolvedPackageOutput(resolvedPackages, isInteractive = true) {
     for (const resolvedPackage of resolvedPackages) {
         isInteractive ? console.log(`${chalk_1.default.green('>>')} ${chalk_1.default.cyan(resolvedPackage.name)} ${(0, lodash_1.repeat)(' ', maxLength - resolvedPackage.name.length)}${chalk_1.default.gray(resolvedPackage.semVerInfo)}`) : core.info(`>> ${resolvedPackage.name} ${(0, lodash_1.repeat)(' ', maxLength - resolvedPackage.name.length)}${resolvedPackage.semVerInfo}`);
     }
-    isInteractive ? console.log() : core.info('');
+    if (isInteractive) {
+        console.log();
+    }
 }
 exports.createResolvedPackageOutput = createResolvedPackageOutput;
 function createMessage(keyOrMessage, severity = Severity.INFO) {

@@ -1,6 +1,6 @@
 {
-  "name": "@dp/source",
-  "version": "0.0.1",
+  "name": "dependency-parser",
+  "version": "0.1.0",
   "license": "MIT",
   "author": "Christian Knauf",
   "scripts": {

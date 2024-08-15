@@ -32,9 +32,9 @@ async function run(args: ArgumentsCamelCase) {
       ? !!args[ArgumentType.PRE_RELEASE]
       : showPrompts && (await promptQuestion<boolean>('allow_pre_releases'));
   const pinVersions =
-    args[ArgumentType.PIN_VERSIONS] != null
-      ? !!args[ArgumentType.PIN_VERSIONS]
-      : showPrompts && (await promptQuestion<boolean>('pin_versions'));
+    args[ArgumentType.KEEP_VERSIONS] != null
+      ? !!args[ArgumentType.KEEP_VERSIONS]
+      : showPrompts && (await promptQuestion<boolean>('keep_versions'));
   const forceRegeneration = !!args[ArgumentType.FORCE_REGENERATION];
 
   // initialize evaluator
@@ -163,7 +163,7 @@ yargs(hideBin(process.argv))
     alias: 'i',
     type: 'boolean',
     boolean: true,
-    description: 'Install the resolved dependencies',
+    description: 'Install the resolved dependencies with package manager',
   })
   .option(ArgumentType.MAJOR_VERSIONS, {
     type: 'number',
@@ -173,7 +173,7 @@ yargs(hideBin(process.argv))
   .option(ArgumentType.MINOR_VERSIONS, {
     type: 'number',
     number: true,
-    description: 'Number of minor and patch versions allowed per major version',
+    description: 'Number of minor versions allowed per major version',
   })
   .option(ArgumentType.MIGRATE, {
     alias: 'm',
@@ -190,7 +190,7 @@ yargs(hideBin(process.argv))
   .option(ArgumentType.PACKAGE_MANAGER, {
     type: 'string',
     string: true,
-    description: 'Package manager to use for installation',
+    description: 'The package manager used for installation',
     choices: ['npm', 'pnpm', 'yarn'],
   })
   .option(ArgumentType.PATH, {
@@ -198,11 +198,11 @@ yargs(hideBin(process.argv))
     string: true,
     description: 'Path of the package.json file',
   })
-  .option(ArgumentType.PIN_VERSIONS, {
-    alias: 'v',
+  .option(ArgumentType.KEEP_VERSIONS, {
+    alias: 'k',
     type: 'boolean',
     boolean: true,
-    description: 'Pin the versions specified in package.json',
+    description: 'Keep the versions specified in package.json',
   })
   .option(ArgumentType.PRE_RELEASE, {
     alias: 'p',
@@ -220,6 +220,6 @@ yargs(hideBin(process.argv))
     alias: 's',
     type: 'boolean',
     boolean: true,
-    description: 'Disable all user prompts',
+    description: 'Skip all user prompts',
   })
   .parse();

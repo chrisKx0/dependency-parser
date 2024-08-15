@@ -2,33 +2,24 @@ name: dependency-parser
 description: Keeps the peer dependencies of your project up-to-date
 author: Christian Knauf
 inputs:
-  # Core options
-  base-branch:
-    description: The base branch of the repository
-    default: main
-    required: true
-  repo-token:
-    description: The GITHUB_TOKEN secret
-    required: true
   package-json-path:
-    description: The path of the package.json file of the project to update
+    description: The relative path of the package.json file of the project to update
     default: .
     required: true
-  # Dependency parser options
   allowed-major-versions:
     description: Number of major versions allowed to downgrade
     default: '2'
     required: false
   allowed-minor-versions:
-    description: Number of minor and patch versions allowed per major version
+    description: Number of minor versions allowed per major version
     default: '10'
     required: false
   allow-pre-releases:
     description: Allow dependencies with pre-release versions (e.g. beta versions)
     default: 'false'
     required: false
-  pin-versions:
-    description: Pin the versions specified in package.json
+  keep-versions:
+    description: Keep the versions specified in package.json
     default: 'false'
     required: false
 runs:

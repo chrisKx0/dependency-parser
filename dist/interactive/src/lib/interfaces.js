@@ -14,10 +14,10 @@ var ArgumentType;
     ArgumentType["MODIFY_JSON"] = "modify-json";
     ArgumentType["PACKAGE_MANAGER"] = "package-manager";
     ArgumentType["PATH"] = "path";
-    ArgumentType["PIN_VERSIONS"] = "pin-versions";
+    ArgumentType["KEEP_VERSIONS"] = "keep-versions";
     ArgumentType["PRE_RELEASE"] = "pre-release";
     ArgumentType["RETRY"] = "retry";
-    ArgumentType["SKIP_PROMPTS"] = "hide-prompts";
+    ArgumentType["SKIP_PROMPTS"] = "skip-prompts";
 })(ArgumentType || (exports.ArgumentType = ArgumentType = {}));
 var State;
 (function (State) {

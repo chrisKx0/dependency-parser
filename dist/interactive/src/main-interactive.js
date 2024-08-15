@@ -17,9 +17,9 @@ function run(args) {
         const allowPreReleases = args[lib_1.ArgumentType.PRE_RELEASE] != null
             ? !!args[lib_1.ArgumentType.PRE_RELEASE]
             : showPrompts && (yield (0, lib_1.promptQuestion)('allow_pre_releases'));
-        const pinVersions = args[lib_1.ArgumentType.PIN_VERSIONS] != null
-            ? !!args[lib_1.ArgumentType.PIN_VERSIONS]
-            : showPrompts && (yield (0, lib_1.promptQuestion)('pin_versions'));
+        const pinVersions = args[lib_1.ArgumentType.KEEP_VERSIONS] != null
+            ? !!args[lib_1.ArgumentType.KEEP_VERSIONS]
+            : showPrompts && (yield (0, lib_1.promptQuestion)('keep_versions'));
         const forceRegeneration = !!args[lib_1.ArgumentType.FORCE_REGENERATION];
         // initialize evaluator
         const evaluator = new lib_1.Evaluator(allowedMajorVersions, allowedMinorAndPatchVersions, allowPreReleases, pinVersions, forceRegeneration);
@@ -127,7 +127,7 @@ function run(args) {
     alias: 'i',
     type: 'boolean',
     boolean: true,
-    description: 'Install the resolved dependencies',
+    description: 'Install the resolved dependencies with package manager',
 })
     .option(lib_1.ArgumentType.MAJOR_VERSIONS, {
     type: 'number',
@@ -137,7 +137,7 @@ function run(args) {
     .option(lib_1.ArgumentType.MINOR_VERSIONS, {
     type: 'number',
     number: true,
-    description: 'Number of minor and patch versions allowed per major version',
+    description: 'Number of minor versions allowed per major version',
 })
     .option(lib_1.ArgumentType.MIGRATE, {
     alias: 'm',
@@ -154,7 +154,7 @@ function run(args) {
     .option(lib_1.ArgumentType.PACKAGE_MANAGER, {
     type: 'string',
     string: true,
-    description: 'Package manager to use for installation',
+    description: 'The package manager used for installation',
     choices: ['npm', 'pnpm', 'yarn'],
 })
     .option(lib_1.ArgumentType.PATH, {
@@ -162,11 +162,11 @@ function run(args) {
     string: true,
     description: 'Path of the package.json file',
 })
-    .option(lib_1.ArgumentType.PIN_VERSIONS, {
-    alias: 'v',
+    .option(lib_1.ArgumentType.KEEP_VERSIONS, {
+    alias: 'k',
     type: 'boolean',
     boolean: true,
-    description: 'Pin the versions specified in package.json',
+    description: 'Keep the versions specified in package.json',
 })
     .option(lib_1.ArgumentType.PRE_RELEASE, {
     alias: 'p',
@@ -184,7 +184,7 @@ function run(args) {
     alias: 's',
     type: 'boolean',
     boolean: true,
-    description: 'Disable all user prompts',
+    description: 'Skip all user prompts',
 })
     .parse();
 //# sourceMappingURL=main-interactive.js.map

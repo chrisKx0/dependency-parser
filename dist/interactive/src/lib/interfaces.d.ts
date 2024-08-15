@@ -10,10 +10,10 @@ export declare enum ArgumentType {
     MODIFY_JSON = "modify-json",
     PACKAGE_MANAGER = "package-manager",
     PATH = "path",
-    PIN_VERSIONS = "pin-versions",
+    KEEP_VERSIONS = "keep-versions",
     PRE_RELEASE = "pre-release",
     RETRY = "retry",
-    SKIP_PROMPTS = "hide-prompts"
+    SKIP_PROMPTS = "skip-prompts"
 }
 export declare enum State {
     OK = "OK",

@@ -1,5 +1,5 @@
 {
-  "name": "dp",
+  "name": "dependency-parser",
   "$schema": "node_modules/nx/schemas/project-schema.json",
   "sourceRoot": "src",
   "projectType": "library",
@@ -8,7 +8,7 @@
       "executor": "@nx/js:node",
       "dependsOn": ["build"],
       "options": {
-        "buildTarget": "dp:build"
+        "buildTarget": "dependency-parser:build"
       }
     },
     "build": {
@@ -33,7 +33,7 @@
       "outputs": ["{options.reportsDirectory}"],
       "options": {
         "passWithNoTests": true,
-        "reportsDirectory": "coverage/dp"
+        "reportsDirectory": "coverage/dependency-parser"
       }
     }
   },

@@ -28,8 +28,8 @@
     "type": "confirm",
     "default": true
   },
-  "pin_versions": {
-    "message": "Pin the currently specified versions of package.json?",
+  "keep_versions": {
+    "message": "Keep the currently specified versions in package.json?",
     "type": "confirm",
     "default": false
   },

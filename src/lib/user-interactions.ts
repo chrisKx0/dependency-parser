@@ -34,13 +34,15 @@ export async function promptQuestion<T extends PackageManager | number | boolean
 }
 
 export function createOpenRequirementOutput(openRequirements: PackageRequirement[], isInteractive = true) {
-  const titleText = 'Resolution will be executed in order for the following dependencies:\n';
+  const titleText = 'Resolution will be executed in order for the following dependencies:';
     isInteractive ? console.log(chalk.bold(titleText)) : core.info(titleText);
     for (let i = 0; i < openRequirements.length; i++) {
       const openRequirement = openRequirements[i];
       isInteractive ? console.log(`${chalk.green(i + 1 + ')')} ${chalk.cyan(openRequirement.name)}`) : core.info(`${i + 1}) ${openRequirement.name}`);
     }
-    isInteractive ? console.log() : core.info('');
+    if (isInteractive) {
+      console.log();
+    }
 }
 
 export function createResolvedPackageOutput(resolvedPackages: ResolvedPackage[], isInteractive = true) {
@@ -53,7 +55,9 @@ export function createResolvedPackageOutput(resolvedPackages: ResolvedPackage[],
       )}`,
     ): core.info(`>> ${resolvedPackage.name} ${repeat(' ', maxLength - resolvedPackage.name.length)}${resolvedPackage.semVerInfo}`);
   }
-  isInteractive ? console.log() : core.info('');
+  if (isInteractive) {
+    console.log();
+  }
 }
 
 export function createMessage(keyOrMessage: string, severity: Severity = Severity.INFO) {
