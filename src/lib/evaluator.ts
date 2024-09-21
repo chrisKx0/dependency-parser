@@ -1,8 +1,12 @@
 import { compareVersions, satisfies } from 'compare-versions';
-import { PackageJson } from 'nx/src/utils/package-json';
 import * as fs from 'fs';
+import { uniq } from 'lodash';
+import { PackageJson } from 'nx/src/utils/package-json';
 import * as process from 'process';
+import { diff, major, minor, patch, SemVer, validRange } from 'semver';
+import semver from 'semver/preload';
 import { ArgumentsCamelCase } from 'yargs';
+
 import {
   ArgsUnattended,
   ArgumentType,
@@ -12,13 +16,10 @@ import {
   PackageDetails,
   PackageRequirement,
   ResolvedPackage,
+  RegistryClient,
   State,
   VersionRange,
-} from './interfaces';
-import { RegistryClient } from './registry-client';
-import { diff, major, minor, patch, SemVer, validRange } from 'semver';
-import { uniq } from 'lodash';
-import semver from 'semver/preload';
+} from './util';
 
 function isArgumentsCamelCase(args: ArgumentsCamelCase | ArgsUnattended): args is ArgumentsCamelCase {
   return !!(args as ArgumentsCamelCase)._;
@@ -136,10 +137,7 @@ export class Evaluator {
       const versionReference = this.getVersionReference(availableVersions, major);
       let compatibleVersions =
         currentRequirement.versionRequirement && currentRequirement.versionRequirement !== '*'
-          ? availableVersions.filter(
-              (v) =>
-                v && satisfies(v, currentRequirement.versionRequirement.replace('ˆ', '^')),
-            )
+          ? availableVersions.filter((v) => v && satisfies(v, currentRequirement.versionRequirement.replace('ˆ', '^')))
           : availableVersions.filter(
               (v) =>
                 v &&
@@ -155,7 +153,10 @@ export class Evaluator {
       for (const versionToExplore of compatibleVersions) {
         if (conflictState.state === State.CONFLICT) {
           const packageDetails = await this.client.getPackageDetails(currentRequirement.name, versionToExplore);
-          if (!this.allowPreReleases && Object.values({...packageDetails.dependencies, ...packageDetails.peerDependencies }).some((d) => d.includes('-'))) {
+          if (
+            !this.allowPreReleases &&
+            Object.values({ ...packageDetails.dependencies, ...packageDetails.peerDependencies }).some((d) => d.includes('-'))
+          ) {
             continue;
           }
           if (packageDetails.peerDependencies) {
@@ -268,7 +269,9 @@ export class Evaluator {
     versions: string[],
     func: (version: string | SemVer, optionsOrLoose?: boolean | semver.Options) => number,
   ): string {
-    return versions.length === 1 ? versions[0] : versions.find((version, idx, array) => func(version) - (array[idx + 1] ? func(array[idx + 1]) : 0) <= 1);
+    return versions.length === 1
+      ? versions[0]
+      : versions.find((version, idx, array) => func(version) - (array[idx + 1] ? func(array[idx + 1]) : 0) <= 1);
   }
 
   private getVersionsInMinorAndPatchRange(versions: string[]): string[] {

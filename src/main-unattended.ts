@@ -1,7 +1,5 @@
 import * as core from '@actions/core';
-// import * as github from '@actions/github';
 import * as path from 'path';
-// import { Context } from '@actions/github/lib/context';
 
 import {
   areResolvedPackages,
@@ -10,19 +8,13 @@ import {
   createResolvedPackageOutput,
   Evaluator,
   Installer,
-  State
+  State,
 } from './lib';
 
 export async function run() {
-  // get paths of github workspace, the repository and the package.json file inside the workspace
+  // get path of the package.json file inside the workspace
   const workspaceRoot = process.env.GITHUB_WORKSPACE || '';
-  // const repoToken = core.getInput('repo-token');
-  // const repoPath = `https://${repoToken}@github.com/${context.repo.owner}/${context.repo.repo}.git`;
   const packageJsonPath = path.normalize(path.join(workspaceRoot, core.getInput('package-json-path')));
-
-  // clone git repository
-  // const gitClient = new GitClient(workspaceRoot);
-  // await gitClient.clone(repoPath);
 
   // initialize evaluator
   const allowedMajorVersions = parseInt(core.getInput('allowed-major-versions', { trimWhitespace: true })) || 2;
@@ -34,7 +26,6 @@ export async function run() {
   core.info('-- Preparing dependency resolution --');
 
   // run preparation
-
   const openRequirements = await evaluator.prepare({ path: packageJsonPath });
   createOpenRequirementOutput(openRequirements, false);
 
@@ -53,7 +44,7 @@ export async function run() {
     const installer = new Installer();
     installer.updatePackageJson(conflictState.result, packageJsonPath + '/package.json');
   } else {
-    core.error('Unable to evaluate dependencies with the provided parameters')
+    core.error('Unable to evaluate dependencies with the provided parameters');
   }
 }
 

@@ -1,7 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
-import { getPackageManifest, getPackument } from 'query-registry';
-import { PackageDetails, Versions } from './interfaces';
 import { sum } from 'lodash';
+import { getPackageManifest, getPackument } from 'query-registry';
+
+import { PackageDetails, Versions } from './interfaces';
 
 const DETAILS_FILENAME = 'details.json';
 // const VERSIONS_FILENAME = 'versions.json';
@@ -38,8 +39,8 @@ export class RegistryClient {
       if (packument.versions) {
         versions.versions = Object.keys(packument.versions).filter((version) => version);
         const sizes = Object.values(packument.versions)
-                .map((rpm) => rpm?.dist?.unpackedSize)
-                .filter((n) => !isNaN(n));
+          .map((rpm) => rpm?.dist?.unpackedSize)
+          .filter((n) => !isNaN(n));
         versions.meanSize = this.calculateMeanSize(sizes);
       }
       this.versions[name] = versions;

@@ -1,13 +1,12 @@
-import { readFileSync, writeFileSync } from 'fs';
-import { PackageManager } from 'nx/src/utils/package-manager';
-import { NxJsonConfiguration } from 'nx/src/config/nx-json';
-import { lockFileExists } from 'nx/src/plugins/js/lock-file/lock-file';
-
-import { PackageRequirement, ResolvedPackage } from './interfaces';
-import { PackageJson } from 'nx/src/utils/package-json';
 import { execSync } from 'child_process';
 import { validate } from 'compare-versions';
-import { createMessage, Severity } from './user-interactions';
+import { readFileSync, writeFileSync } from 'fs';
+import { lockFileExists } from 'nx/src/plugins/js/lock-file/lock-file';
+import { NxJsonConfiguration } from 'nx/src/config/nx-json';
+import { PackageManager } from 'nx/src/utils/package-manager';
+import { PackageJson } from 'nx/src/utils/package-json';
+
+import { createMessage, PackageRequirement, Severity, ResolvedPackage } from './util';
 
 export function areResolvedPackages(array: ResolvedPackage[] | PackageRequirement[]): array is ResolvedPackage[] {
   return Array.isArray(array) && (!array.length || !!(array[0] as ResolvedPackage).semVerInfo);
@@ -109,9 +108,7 @@ export class Installer {
       }
 
       // sort dependencies alphabetically before writing to file
-      packageJson.dependencies = Object.fromEntries(
-        Object.entries(packageJson.dependencies).sort((a, b) => a[0].localeCompare(b[0])),
-      );
+      packageJson.dependencies = Object.fromEntries(Object.entries(packageJson.dependencies).sort((a, b) => a[0].localeCompare(b[0])));
 
       if (packageJson.devDependencies?.[resolvedPackage.name]) {
         delete packageJson.devDependencies[resolvedPackage.name];
