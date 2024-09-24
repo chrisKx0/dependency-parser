@@ -3,8 +3,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.RegistryClient = void 0;
 const tslib_1 = require("tslib");
 const fs_1 = require("fs");
-const query_registry_1 = require("query-registry");
 const lodash_1 = require("lodash");
+const query_registry_1 = require("query-registry");
 const DETAILS_FILENAME = 'details.json';
 // const VERSIONS_FILENAME = 'versions.json';
 class RegistryClient {

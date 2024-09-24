@@ -1,5 +1,5 @@
-import { PackageRequirement, ResolvedPackage } from './interfaces';
 import { PackageManager } from 'nx/src/utils/package-manager';
+import { PackageRequirement, ResolvedPackage } from './interfaces';
 export declare enum Severity {
     INFO = "info",
     SUCCESS = "success",

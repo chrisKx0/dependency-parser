@@ -5,9 +5,9 @@ const tslib_1 = require("tslib");
 const core = tslib_1.__importStar(require("@actions/core"));
 const chalk_1 = tslib_1.__importDefault(require("chalk"));
 const inquirer_1 = tslib_1.__importDefault(require("inquirer"));
-const messages_json_1 = tslib_1.__importDefault(require("./data/messages.json"));
-const questions_json_1 = tslib_1.__importDefault(require("./data/questions.json"));
 const lodash_1 = require("lodash");
+const messages_json_1 = tslib_1.__importDefault(require("../data/messages.json"));
+const questions_json_1 = tslib_1.__importDefault(require("../data/questions.json"));
 var Severity;
 (function (Severity) {
     Severity["INFO"] = "info";
@@ -32,7 +32,9 @@ function createOpenRequirementOutput(openRequirements, isInteractive = true) {
     isInteractive ? console.log(chalk_1.default.bold(titleText)) : core.info(titleText);
     for (let i = 0; i < openRequirements.length; i++) {
         const openRequirement = openRequirements[i];
-        isInteractive ? console.log(`${chalk_1.default.green(i + 1 + ')')} ${chalk_1.default.cyan(openRequirement.name)}`) : core.info(`${i + 1}) ${openRequirement.name}`);
+        isInteractive
+            ? console.log(`${chalk_1.default.green(i + 1 + ')')} ${chalk_1.default.cyan(openRequirement.name)}`)
+            : core.info(`${i + 1}) ${openRequirement.name}`);
     }
     if (isInteractive) {
         console.log();
@@ -43,7 +45,9 @@ function createResolvedPackageOutput(resolvedPackages, isInteractive = true) {
     isInteractive ? createMessage('resolution_success', Severity.SUCCESS) : core.info(messages_json_1.default['resolution_success']);
     const maxLength = (0, lodash_1.max)(resolvedPackages.map((pr) => pr.name.length));
     for (const resolvedPackage of resolvedPackages) {
-        isInteractive ? console.log(`${chalk_1.default.green('>>')} ${chalk_1.default.cyan(resolvedPackage.name)} ${(0, lodash_1.repeat)(' ', maxLength - resolvedPackage.name.length)}${chalk_1.default.gray(resolvedPackage.semVerInfo)}`) : core.info(`>> ${resolvedPackage.name} ${(0, lodash_1.repeat)(' ', maxLength - resolvedPackage.name.length)}${resolvedPackage.semVerInfo}`);
+        isInteractive
+            ? console.log(`${chalk_1.default.green('>>')} ${chalk_1.default.cyan(resolvedPackage.name)} ${(0, lodash_1.repeat)(' ', maxLength - resolvedPackage.name.length)}${chalk_1.default.gray(resolvedPackage.semVerInfo)}`)
+            : core.info(`>> ${resolvedPackage.name} ${(0, lodash_1.repeat)(' ', maxLength - resolvedPackage.name.length)}${resolvedPackage.semVerInfo}`);
     }
     if (isInteractive) {
         console.log();

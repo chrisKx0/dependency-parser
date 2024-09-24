@@ -2,11 +2,11 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Installer = exports.areResolvedPackages = void 0;
 const tslib_1 = require("tslib");
-const fs_1 = require("fs");
-const lock_file_1 = require("nx/src/plugins/js/lock-file/lock-file");
 const child_process_1 = require("child_process");
 const compare_versions_1 = require("compare-versions");
-const user_interactions_1 = require("./user-interactions");
+const fs_1 = require("fs");
+const lock_file_1 = require("nx/src/plugins/js/lock-file/lock-file");
+const util_1 = require("./util");
 function areResolvedPackages(array) {
     return Array.isArray(array) && (!array.length || !!array[0].semVerInfo);
 }
@@ -25,7 +25,7 @@ class Installer {
                     }
                 }
                 catch (e) {
-                    (0, user_interactions_1.createMessage)('nx_migrate_failure', user_interactions_1.Severity.ERROR);
+                    (0, util_1.createMessage)('nx_migrate_failure', util_1.Severity.ERROR);
                 }
             }
             // ng update
@@ -35,7 +35,7 @@ class Installer {
                     (0, child_process_1.execSync)(`ng update ${params}`, { encoding: 'utf8' });
                 }
                 catch (e) {
-                    (0, user_interactions_1.createMessage)('ng_update_failure', user_interactions_1.Severity.ERROR);
+                    (0, util_1.createMessage)('ng_update_failure', util_1.Severity.ERROR);
                 }
             }
             // installation
@@ -44,10 +44,10 @@ class Installer {
             }
             catch (e) {
                 if (packageManager === 'npm') {
-                    (0, user_interactions_1.createMessage)('installation_failure', user_interactions_1.Severity.ERROR);
+                    (0, util_1.createMessage)('installation_failure', util_1.Severity.ERROR);
                 }
                 else {
-                    (0, user_interactions_1.createMessage)(`Package installation failed with ${packageManager}. Retrying with npm...`, user_interactions_1.Severity.ERROR);
+                    (0, util_1.createMessage)(`Package installation failed with ${packageManager}. Retrying with npm...`, util_1.Severity.ERROR);
                     yield this.install('npm', path, nxVersion, ngPackages, runMigrations);
                 }
             }

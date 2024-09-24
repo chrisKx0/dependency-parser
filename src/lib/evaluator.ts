@@ -5,6 +5,7 @@ import { PackageJson } from 'nx/src/utils/package-json';
 import * as process from 'process';
 import { diff, major, minor, patch, SemVer, validRange } from 'semver';
 import semver from 'semver/preload';
+import toposort from 'toposort';
 import { ArgumentsCamelCase } from 'yargs';
 
 import {
@@ -44,7 +45,7 @@ export class Evaluator {
 
     // read package.json to retrieve dependencies and peer dependencies
     const packageJson: PackageJson = JSON.parse(fs.readFileSync(path, { encoding: 'utf8' }));
-    const openRequirements: PackageRequirement[] = [
+    let openRequirements: PackageRequirement[] = [
       ...(packageJson.peerDependencies
         ? Object.keys(packageJson.peerDependencies).map((name) => ({
             name,
@@ -91,7 +92,7 @@ export class Evaluator {
     }
 
     // sort direct dependencies by heuristics
-    openRequirements.sort(this.sortByHeuristics);
+    openRequirements = this.sortByHeuristics(openRequirements);
 
     // save cache to disk
     this.client.writeDataToFiles();
@@ -188,7 +189,7 @@ export class Evaluator {
     closedRequirements: PackageRequirement[],
     openRequirements: PackageRequirement[],
   ): Promise<PackageRequirement[]> {
-    const newOpenRequirements = [...openRequirements];
+    let newOpenRequirements = [...openRequirements];
     const newRequirements: PackageRequirement[] = [
       ...(packageDetails.peerDependencies
         ? Object.entries(packageDetails.peerDependencies).map(([name, versionRequirement]) => ({
@@ -218,7 +219,7 @@ export class Evaluator {
     }
 
     // sort new dependencies by heuristics
-    newOpenRequirements.sort(this.sortByHeuristics);
+    newOpenRequirements = this.sortByHeuristics(newOpenRequirements);
 
     return newOpenRequirements;
   }
@@ -260,7 +261,7 @@ export class Evaluator {
         meanSize,
         peers,
         pinnedVersion,
-        versionRange: this.getRangeBetweenVersions(versions[0], versions[versions.length - 1]),
+        versionRange: this.getRangeBetweenVersions(versions),
       };
     }
   }
@@ -284,49 +285,83 @@ export class Evaluator {
     return result;
   }
 
-  private sortByHeuristics = (pr1: PackageRequirement, pr2: PackageRequirement): number => {
-    const heuristics1 = this.heuristics[pr1.name]; // negative value prioritizes pr1
-    const heuristics2 = this.heuristics[pr2.name]; // positive value prioritizes pr2
+  /**
+   * sorts the package requirements in place by heuristics
+   * @param packageRequirements the package requirements to sort
+   * @private
+   */
+  private sortByHeuristics(packageRequirements: PackageRequirement[]): PackageRequirement[] {
+    // topological search with peers
+    const nodes: string[] = [];
+    const edges: [string, string][] = [];
+    for (const pr of packageRequirements) {
+      const heuristics = this.heuristics[pr.name];
+      if (heuristics.peers?.length) {
+        for (const peer of heuristics.peers) {
+          if (!nodes.includes(pr.name)) {
+            nodes.push(pr.name);
+          }
+          if (!nodes.includes(peer)) {
+            nodes.push(peer);
+          }
+          edges.push([pr.name, peer]);
+        }
+      }
+    }
+    const order = toposort.array(nodes, edges);
 
-    // direct dependencies
-    if (heuristics1.isDirectDependency || heuristics2.isDirectDependency) {
-      if (!heuristics2.isDirectDependency) {
+    const upper = packageRequirements.filter((pr) => nodes.includes(pr.name));
+    const lower = packageRequirements.filter((pr) => !nodes.includes(pr.name));
+
+    // sorting of package requirements with peers
+    upper.sort((pr1: PackageRequirement, pr2: PackageRequirement) => {
+      if (order.indexOf(pr1.name) > order.indexOf(pr2.name)) {
         return 1;
-      } else if (!heuristics1.isDirectDependency) {
+      } else {
         return -1;
       }
-      const hasPeer1 = heuristics1.peers?.includes(pr2.name);
-      const hasPeer2 = heuristics2.peers?.includes(pr1.name);
-      if (!hasPeer1 && hasPeer2) {
+    });
+
+    // sorting of package requirements without peers
+    lower.sort((pr1: PackageRequirement, pr2: PackageRequirement) => {
+      const heuristics1 = this.heuristics[pr1.name];
+      const heuristics2 = this.heuristics[pr2.name];
+
+      // direct dependencies
+      if (heuristics1.isDirectDependency && !heuristics2.isDirectDependency) {
         return 1;
-      } else if (hasPeer1 && !hasPeer2) {
+      } else if (!heuristics1.isDirectDependency && heuristics2.isDirectDependency) {
         return -1;
       }
-    }
 
-    // conflict potential
-    if (heuristics1.conflictPotential > heuristics2.conflictPotential) {
-      return 1;
-    } else if (heuristics1.conflictPotential < heuristics2.conflictPotential) {
-      return -1;
-    }
-
-    // version range
-    if (heuristics1.versionRange.type === heuristics2.versionRange.type) {
-      if (heuristics1.versionRange.value === heuristics2.versionRange.value) {
-        // size
-        return heuristics1.meanSize - heuristics2.meanSize;
-      }
-      return heuristics1.versionRange.value - heuristics2.versionRange.value;
-    } else {
-      if (heuristics1.versionRange.type.endsWith('major') || heuristics2.versionRange.type.endsWith('patch')) {
+      // conflict potential
+      if (heuristics1.conflictPotential > heuristics2.conflictPotential) {
         return 1;
+      } else if (heuristics1.conflictPotential < heuristics2.conflictPotential) {
+        return -1;
       }
-      return -1;
-    }
-  };
 
-  private getRangeBetweenVersions(v1: string, v2: string): VersionRange {
+      // version range & size
+      const versionRange1 = heuristics1.versionRange;
+      const versionRange2 = heuristics2.versionRange;
+      if (versionRange1.type === versionRange2.type) {
+        if (versionRange1.value !== versionRange2.value) {
+          return versionRange1.value - versionRange2.value;
+        } else {
+          return heuristics1.meanSize - heuristics2.meanSize;
+        }
+      } else if (heuristics1.versionRange.type.endsWith('major') || heuristics2.versionRange.type.endsWith('patch')) {
+        return 1;
+      } else {
+        return -1;
+      }
+    });
+    return [...upper, ...lower];
+  }
+
+  private getRangeBetweenVersions(versions: string[]): VersionRange {
+    const v1 = this.getVersionReference(versions, major);
+    const v2 = versions[versions.length - 1];
     let type = diff(v1, v2);
     let value: number;
     switch (type) {

@@ -4,11 +4,11 @@ exports.Evaluator = void 0;
 const tslib_1 = require("tslib");
 const compare_versions_1 = require("compare-versions");
 const fs = tslib_1.__importStar(require("fs"));
-const process = tslib_1.__importStar(require("process"));
-const interfaces_1 = require("./interfaces");
-const registry_client_1 = require("./registry-client");
-const semver_1 = require("semver");
 const lodash_1 = require("lodash");
+const process = tslib_1.__importStar(require("process"));
+const semver_1 = require("semver");
+const toposort_1 = tslib_1.__importDefault(require("toposort"));
+const util_1 = require("./util");
 function isArgumentsCamelCase(args) {
     return !!args._;
 }
@@ -19,60 +19,17 @@ class Evaluator {
         this.allowPreReleases = allowPreReleases;
         this.pinVersions = pinVersions;
         this.forceRegeneration = forceRegeneration;
-        this.client = new registry_client_1.RegistryClient();
+        this.client = new util_1.RegistryClient();
         this.heuristics = {};
-        this.sortByHeuristics = (pr1, pr2) => {
-            var _a, _b;
-            const heuristics1 = this.heuristics[pr1.name]; // negative value prioritizes pr1
-            const heuristics2 = this.heuristics[pr2.name]; // positive value prioritizes pr2
-            // direct dependencies
-            if (heuristics1.isDirectDependency || heuristics2.isDirectDependency) {
-                if (!heuristics2.isDirectDependency) {
-                    return 1;
-                }
-                else if (!heuristics1.isDirectDependency) {
-                    return -1;
-                }
-                const hasPeer1 = (_a = heuristics1.peers) === null || _a === void 0 ? void 0 : _a.includes(pr2.name);
-                const hasPeer2 = (_b = heuristics2.peers) === null || _b === void 0 ? void 0 : _b.includes(pr1.name);
-                if (!hasPeer1 && hasPeer2) {
-                    return 1;
-                }
-                else if (hasPeer1 && !hasPeer2) {
-                    return -1;
-                }
-            }
-            // conflict potential
-            if (heuristics1.conflictPotential > heuristics2.conflictPotential) {
-                return 1;
-            }
-            else if (heuristics1.conflictPotential < heuristics2.conflictPotential) {
-                return -1;
-            }
-            // version range
-            if (heuristics1.versionRange.type === heuristics2.versionRange.type) {
-                if (heuristics1.versionRange.value === heuristics2.versionRange.value) {
-                    // size
-                    return heuristics1.meanSize - heuristics2.meanSize;
-                }
-                return heuristics1.versionRange.value - heuristics2.versionRange.value;
-            }
-            else {
-                if (heuristics1.versionRange.type.endsWith('major') || heuristics2.versionRange.type.endsWith('patch')) {
-                    return 1;
-                }
-                return -1;
-            }
-        };
     }
     prepare(args) {
         var _a;
         return tslib_1.__awaiter(this, void 0, void 0, function* () {
             // get package.json path from args or current working directory & add filename if necessary
-            const path = ((_a = args[interfaces_1.ArgumentType.PATH]) !== null && _a !== void 0 ? _a : process.cwd()) + '/package.json';
+            const path = ((_a = args[util_1.ArgumentType.PATH]) !== null && _a !== void 0 ? _a : process.cwd()) + '/package.json';
             // read package.json to retrieve dependencies and peer dependencies
             const packageJson = JSON.parse(fs.readFileSync(path, { encoding: 'utf8' }));
-            const openRequirements = [
+            let openRequirements = [
                 ...(packageJson.peerDependencies
                     ? Object.keys(packageJson.peerDependencies).map((name) => ({
                         name,
@@ -109,11 +66,11 @@ class Evaluator {
                 }
                 // edit bundled packages to also be of the same version
                 openRequirements
-                    .filter((pr) => interfaces_1.PACKAGE_BUNDLES.some((pb) => pr.name.startsWith(pb) && name.startsWith(pb)))
+                    .filter((pr) => util_1.PACKAGE_BUNDLES.some((pb) => pr.name.startsWith(pb) && name.startsWith(pb)))
                     .forEach((pr) => (pr.versionRequirement = pinnedVersion));
             }
             // sort direct dependencies by heuristics
-            openRequirements.sort(this.sortByHeuristics);
+            openRequirements = this.sortByHeuristics(openRequirements);
             // save cache to disk
             this.client.writeDataToFiles();
             return openRequirements;
@@ -135,7 +92,7 @@ class Evaluator {
                 let version = (_a = selectedPackageVersions.find((rp) => rp.name === currentRequirement.name)) === null || _a === void 0 ? void 0 : _a.semVerInfo;
                 if (!version) {
                     // bundled packages need to be of the same version
-                    version = (_b = selectedPackageVersions.find((rp) => interfaces_1.PACKAGE_BUNDLES.some((pb) => rp.name.startsWith(pb) && currentRequirement.name.startsWith(pb)))) === null || _b === void 0 ? void 0 : _b.semVerInfo;
+                    version = (_b = selectedPackageVersions.find((rp) => util_1.PACKAGE_BUNDLES.some((pb) => rp.name.startsWith(pb) && currentRequirement.name.startsWith(pb)))) === null || _b === void 0 ? void 0 : _b.semVerInfo;
                 }
                 let availableVersions;
                 if (version) {
@@ -158,11 +115,12 @@ class Evaluator {
                         (0, compare_versions_1.compareVersions)(v, Math.max((0, semver_1.major)(versionReference) - this.allowedMajorVersions, 0).toString()) !== -1 &&
                         (this.allowPreReleases || !v.includes('-')));
                 compatibleVersions = this.getVersionsInMinorAndPatchRange(compatibleVersions);
-                let conflictState = { state: interfaces_1.State.CONFLICT };
+                let conflictState = { state: util_1.State.CONFLICT };
                 for (const versionToExplore of compatibleVersions) {
-                    if (conflictState.state === interfaces_1.State.CONFLICT) {
+                    if (conflictState.state === util_1.State.CONFLICT) {
                         const packageDetails = yield this.client.getPackageDetails(currentRequirement.name, versionToExplore);
-                        if (!this.allowPreReleases && Object.values(Object.assign(Object.assign({}, packageDetails.dependencies), packageDetails.peerDependencies)).some((d) => d.includes('-'))) {
+                        if (!this.allowPreReleases &&
+                            Object.values(Object.assign(Object.assign({}, packageDetails.dependencies), packageDetails.peerDependencies)).some((d) => d.includes('-'))) {
                             continue;
                         }
                         if (packageDetails.peerDependencies) {
@@ -174,19 +132,19 @@ class Evaluator {
                             : selectedPackageVersions, [...closedRequirements, currentRequirement], yield this.addDependenciesToOpenSet(packageDetails, closedRequirements, openRequirements));
                     }
                 }
-                if (conflictState.state === interfaces_1.State.CONFLICT) {
+                if (conflictState.state === util_1.State.CONFLICT) {
                     this.heuristics[currentRequirement.name].conflictPotential++;
                 }
                 return conflictState;
             }
             else {
-                return { result: selectedPackageVersions, state: interfaces_1.State.OK };
+                return { result: selectedPackageVersions, state: util_1.State.OK };
             }
         });
     }
     addDependenciesToOpenSet(packageDetails, closedRequirements, openRequirements) {
         return tslib_1.__awaiter(this, void 0, void 0, function* () {
-            const newOpenRequirements = [...openRequirements];
+            let newOpenRequirements = [...openRequirements];
             const newRequirements = [
                 ...(packageDetails.peerDependencies
                     ? Object.entries(packageDetails.peerDependencies).map(([name, versionRequirement]) => ({
@@ -212,7 +170,7 @@ class Evaluator {
                 }
             }
             // sort new dependencies by heuristics
-            newOpenRequirements.sort(this.sortByHeuristics);
+            newOpenRequirements = this.sortByHeuristics(newOpenRequirements);
             return newOpenRequirements;
         });
     }
@@ -248,13 +206,15 @@ class Evaluator {
                     meanSize,
                     peers,
                     pinnedVersion,
-                    versionRange: this.getRangeBetweenVersions(versions[0], versions[versions.length - 1]),
+                    versionRange: this.getRangeBetweenVersions(versions),
                 };
             }
         });
     }
     getVersionReference(versions, func) {
-        return versions.length === 1 ? versions[0] : versions.find((version, idx, array) => func(version) - (array[idx + 1] ? func(array[idx + 1]) : 0) <= 1);
+        return versions.length === 1
+            ? versions[0]
+            : versions.find((version, idx, array) => func(version) - (array[idx + 1] ? func(array[idx + 1]) : 0) <= 1);
     }
     getVersionsInMinorAndPatchRange(versions) {
         const result = [];
@@ -265,7 +225,83 @@ class Evaluator {
         }
         return result;
     }
-    getRangeBetweenVersions(v1, v2) {
+    /**
+     * sorts the package requirements in place by heuristics
+     * @param packageRequirements the package requirements to sort
+     * @private
+     */
+    sortByHeuristics(packageRequirements) {
+        var _a;
+        // topological search with peers
+        const nodes = [];
+        const edges = [];
+        for (const pr of packageRequirements) {
+            const heuristics = this.heuristics[pr.name];
+            if ((_a = heuristics.peers) === null || _a === void 0 ? void 0 : _a.length) {
+                for (const peer of heuristics.peers) {
+                    if (!nodes.includes(pr.name)) {
+                        nodes.push(pr.name);
+                    }
+                    if (!nodes.includes(peer)) {
+                        nodes.push(peer);
+                    }
+                    edges.push([pr.name, peer]);
+                }
+            }
+        }
+        const order = toposort_1.default.array(nodes, edges);
+        const upper = packageRequirements.filter((pr) => nodes.includes(pr.name));
+        const lower = packageRequirements.filter((pr) => !nodes.includes(pr.name));
+        // sorting of package requirements with peers
+        upper.sort((pr1, pr2) => {
+            if (order.indexOf(pr1.name) > order.indexOf(pr2.name)) {
+                return 1;
+            }
+            else {
+                return -1;
+            }
+        });
+        // sorting of package requirements without peers
+        lower.sort((pr1, pr2) => {
+            const heuristics1 = this.heuristics[pr1.name];
+            const heuristics2 = this.heuristics[pr2.name];
+            // direct dependencies
+            if (heuristics1.isDirectDependency && !heuristics2.isDirectDependency) {
+                return 1;
+            }
+            else if (!heuristics1.isDirectDependency && heuristics2.isDirectDependency) {
+                return -1;
+            }
+            // conflict potential
+            if (heuristics1.conflictPotential > heuristics2.conflictPotential) {
+                return 1;
+            }
+            else if (heuristics1.conflictPotential < heuristics2.conflictPotential) {
+                return -1;
+            }
+            // version range & size
+            const versionRange1 = heuristics1.versionRange;
+            const versionRange2 = heuristics2.versionRange;
+            if (versionRange1.type === versionRange2.type) {
+                if (versionRange1.value !== versionRange2.value) {
+                    return versionRange1.value - versionRange2.value;
+                }
+                else {
+                    return heuristics1.meanSize - heuristics2.meanSize;
+                }
+            }
+            else if (heuristics1.versionRange.type.endsWith('major') || heuristics2.versionRange.type.endsWith('patch')) {
+                return 1;
+            }
+            else {
+                return -1;
+            }
+        });
+        return [...upper, ...lower];
+    }
+    getRangeBetweenVersions(versions) {
+        const v1 = this.getVersionReference(versions, semver_1.major);
+        const v2 = versions[versions.length - 1];
         let type = (0, semver_1.diff)(v1, v2);
         let value;
         switch (type) {
