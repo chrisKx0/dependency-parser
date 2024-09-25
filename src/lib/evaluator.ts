@@ -12,6 +12,7 @@ import {
   ArgsUnattended,
   ArgumentType,
   ConflictState,
+  Edge,
   Heuristics,
   PACKAGE_BUNDLES,
   PackageDetails,
@@ -20,6 +21,8 @@ import {
   RegistryClient,
   State,
   VersionRange,
+  EdgeWithPeer,
+  PackageSet,
 } from './util';
 
 function isArgumentsCamelCase(args: ArgumentsCamelCase | ArgsUnattended): args is ArgumentsCamelCase {
@@ -30,6 +33,7 @@ export class Evaluator {
   private readonly client = new RegistryClient();
   private readonly heuristics: Record<string, Heuristics> = {};
   private directDependencies: string[];
+  private packageSets: PackageSet[] = [];
 
   constructor(
     private readonly allowedMajorVersions = 2,
@@ -101,7 +105,7 @@ export class Evaluator {
   }
 
   public async evaluate(openRequirements: PackageRequirement[]) {
-    const result = await this.evaluationStep([], [], openRequirements);
+    const result = await this.evaluationStep([], [], openRequirements, []);
     // save cache to disk
     this.client.writeDataToFiles();
     return result;
@@ -111,6 +115,7 @@ export class Evaluator {
     selectedPackageVersions: ResolvedPackage[],
     closedRequirements: PackageRequirement[],
     openRequirements: PackageRequirement[],
+    edges: EdgeWithPeer[],
   ): Promise<ConflictState> {
     if (openRequirements.length) {
       const currentRequirement = openRequirements.shift();
@@ -149,6 +154,11 @@ export class Evaluator {
 
       compatibleVersions = this.getVersionsInMinorAndPatchRange(compatibleVersions);
 
+      // remove set if needed
+      this.packageSets = this.packageSets.filter((ps) =>
+        ps.filter((entry) => entry[1]).some((entry) => !selectedPackageVersions.map((rp) => rp.name).includes(entry[0])),
+      );
+
       let conflictState: ConflictState = { state: State.CONFLICT };
 
       for (const versionToExplore of compatibleVersions) {
@@ -165,18 +175,37 @@ export class Evaluator {
               this.directDependencies.includes(peer),
             );
           }
+          const { newOpenRequirements, newEdges } = await this.addDependenciesToOpenSet(
+            packageDetails,
+            closedRequirements,
+            openRequirements,
+          );
           conflictState = await this.evaluationStep(
             currentRequirement.peer &&
               !selectedPackageVersions.some((rp) => rp.name === packageDetails.name && rp.semVerInfo === packageDetails.version)
               ? [...selectedPackageVersions, { name: packageDetails.name, semVerInfo: packageDetails.version }]
               : selectedPackageVersions,
             [...closedRequirements, currentRequirement],
-            await this.addDependenciesToOpenSet(packageDetails, closedRequirements, openRequirements),
+            newOpenRequirements,
+            [...edges, ...newEdges],
           );
+          // direct backtracking to package from a set
+          if (!this.packageSets.find((ps) => ps.find((entry) => entry[0] === currentRequirement.name))) {
+            break;
+          }
         }
       }
       if (conflictState.state === State.CONFLICT) {
         this.heuristics[currentRequirement.name].conflictPotential++;
+        // create set
+        const parent = edges.find((e) => e[1] === currentRequirement.name)?.[0];
+        const packageSet = this.packageSets.find((ps) => ps.find((entry) => entry[0] === parent)) || [];
+        packageSet.push([currentRequirement.name, currentRequirement.peer]);
+        edges.forEach((e) => {
+          if (e[1] === currentRequirement.name && !packageSet.find((entry) => entry[0] === e[0])) {
+            packageSet.push([e[0], false]);
+          }
+        });
       }
       return conflictState;
     } else {
@@ -188,8 +217,9 @@ export class Evaluator {
     packageDetails: PackageDetails,
     closedRequirements: PackageRequirement[],
     openRequirements: PackageRequirement[],
-  ): Promise<PackageRequirement[]> {
+  ): Promise<{ newOpenRequirements: PackageRequirement[]; newEdges: EdgeWithPeer[] }> {
     let newOpenRequirements = [...openRequirements];
+    const newEdges: EdgeWithPeer[] = [];
     const newRequirements: PackageRequirement[] = [
       ...(packageDetails.peerDependencies
         ? Object.entries(packageDetails.peerDependencies).map(([name, versionRequirement]) => ({
@@ -214,6 +244,7 @@ export class Evaluator {
         !closedRequirements.some((pr) => pr.name === newRequirement.name && pr.versionRequirement === newRequirement.versionRequirement)
       ) {
         newOpenRequirements.push(newRequirement);
+        newEdges.push([packageDetails.name, newRequirement.name, newRequirement.peer]);
         await this.createHeuristics(newRequirement.name);
       }
     }
@@ -221,7 +252,7 @@ export class Evaluator {
     // sort new dependencies by heuristics
     newOpenRequirements = this.sortByHeuristics(newOpenRequirements);
 
-    return newOpenRequirements;
+    return { newOpenRequirements, newEdges };
   }
 
   private async createHeuristics(name: string, pinnedVersion?: string, isDirectDependency = false) {
@@ -293,7 +324,7 @@ export class Evaluator {
   private sortByHeuristics(packageRequirements: PackageRequirement[]): PackageRequirement[] {
     // topological search with peers
     const nodes: string[] = [];
-    const edges: [string, string][] = [];
+    const edges: Edge[] = [];
     for (const pr of packageRequirements) {
       const heuristics = this.heuristics[pr.name];
       if (heuristics.peers?.length) {

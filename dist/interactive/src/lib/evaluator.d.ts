@@ -9,6 +9,7 @@ export declare class Evaluator {
     private readonly client;
     private readonly heuristics;
     private directDependencies;
+    private packageSets;
     constructor(allowedMajorVersions?: number, allowedMinorAndPatchVersions?: number, allowPreReleases?: boolean, pinVersions?: boolean, forceRegeneration?: boolean);
     prepare(args: ArgumentsCamelCase | ArgsUnattended): Promise<PackageRequirement[]>;
     evaluate(openRequirements: PackageRequirement[]): Promise<ConflictState>;

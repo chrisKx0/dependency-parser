@@ -21,6 +21,7 @@ class Evaluator {
         this.forceRegeneration = forceRegeneration;
         this.client = new util_1.RegistryClient();
         this.heuristics = {};
+        this.packageSets = [];
     }
     prepare(args) {
         var _a;
@@ -78,14 +79,14 @@ class Evaluator {
     }
     evaluate(openRequirements) {
         return tslib_1.__awaiter(this, void 0, void 0, function* () {
-            const result = yield this.evaluationStep([], [], openRequirements);
+            const result = yield this.evaluationStep([], [], openRequirements, []);
             // save cache to disk
             this.client.writeDataToFiles();
             return result;
         });
     }
-    evaluationStep(selectedPackageVersions, closedRequirements, openRequirements) {
-        var _a, _b;
+    evaluationStep(selectedPackageVersions, closedRequirements, openRequirements, edges) {
+        var _a, _b, _c;
         return tslib_1.__awaiter(this, void 0, void 0, function* () {
             if (openRequirements.length) {
                 const currentRequirement = openRequirements.shift();
@@ -115,6 +116,8 @@ class Evaluator {
                         (0, compare_versions_1.compareVersions)(v, Math.max((0, semver_1.major)(versionReference) - this.allowedMajorVersions, 0).toString()) !== -1 &&
                         (this.allowPreReleases || !v.includes('-')));
                 compatibleVersions = this.getVersionsInMinorAndPatchRange(compatibleVersions);
+                // remove set if needed
+                this.packageSets = this.packageSets.filter((ps) => ps.filter((entry) => entry[1]).some((entry) => !selectedPackageVersions.map((rp) => rp.name).includes(entry[0])));
                 let conflictState = { state: util_1.State.CONFLICT };
                 for (const versionToExplore of compatibleVersions) {
                     if (conflictState.state === util_1.State.CONFLICT) {
@@ -126,14 +129,28 @@ class Evaluator {
                         if (packageDetails.peerDependencies) {
                             this.heuristics[currentRequirement.name].peers = Object.keys(packageDetails.peerDependencies).filter((peer) => this.directDependencies.includes(peer));
                         }
+                        const { newOpenRequirements, newEdges } = yield this.addDependenciesToOpenSet(packageDetails, closedRequirements, openRequirements);
                         conflictState = yield this.evaluationStep(currentRequirement.peer &&
                             !selectedPackageVersions.some((rp) => rp.name === packageDetails.name && rp.semVerInfo === packageDetails.version)
                             ? [...selectedPackageVersions, { name: packageDetails.name, semVerInfo: packageDetails.version }]
-                            : selectedPackageVersions, [...closedRequirements, currentRequirement], yield this.addDependenciesToOpenSet(packageDetails, closedRequirements, openRequirements));
+                            : selectedPackageVersions, [...closedRequirements, currentRequirement], newOpenRequirements, [...edges, ...newEdges]);
+                        // direct backtracking to package from a set
+                        if (!this.packageSets.find((ps) => ps.find((entry) => entry[0] === currentRequirement.name))) {
+                            break;
+                        }
                     }
                 }
                 if (conflictState.state === util_1.State.CONFLICT) {
                     this.heuristics[currentRequirement.name].conflictPotential++;
+                    // create set
+                    const parent = (_c = edges.find((e) => e[1] === currentRequirement.name)) === null || _c === void 0 ? void 0 : _c[0];
+                    const packageSet = this.packageSets.find((ps) => ps.find((entry) => entry[0] === parent)) || [];
+                    packageSet.push([currentRequirement.name, currentRequirement.peer]);
+                    edges.forEach((e) => {
+                        if (e[1] === currentRequirement.name && !packageSet.find((entry) => entry[0] === e[0])) {
+                            packageSet.push([e[0], false]);
+                        }
+                    });
                 }
                 return conflictState;
             }
@@ -145,6 +162,7 @@ class Evaluator {
     addDependenciesToOpenSet(packageDetails, closedRequirements, openRequirements) {
         return tslib_1.__awaiter(this, void 0, void 0, function* () {
             let newOpenRequirements = [...openRequirements];
+            const newEdges = [];
             const newRequirements = [
                 ...(packageDetails.peerDependencies
                     ? Object.entries(packageDetails.peerDependencies).map(([name, versionRequirement]) => ({
@@ -166,12 +184,13 @@ class Evaluator {
                 if (!newOpenRequirements.some((pr) => pr.name === newRequirement.name && pr.versionRequirement === newRequirement.versionRequirement) &&
                     !closedRequirements.some((pr) => pr.name === newRequirement.name && pr.versionRequirement === newRequirement.versionRequirement)) {
                     newOpenRequirements.push(newRequirement);
+                    newEdges.push([packageDetails.name, newRequirement.name, newRequirement.peer]);
                     yield this.createHeuristics(newRequirement.name);
                 }
             }
             // sort new dependencies by heuristics
             newOpenRequirements = this.sortByHeuristics(newOpenRequirements);
-            return newOpenRequirements;
+            return { newOpenRequirements, newEdges };
         });
     }
     createHeuristics(name, pinnedVersion, isDirectDependency = false) {

@@ -69,3 +69,9 @@ export interface VersionRange {
   type: ReleaseType;
   value: number;
 }
+
+export type Edge = [string, string];
+export type EdgeWithPeer = [string, string, boolean];
+
+export type PackageSetEntry = [string, boolean];
+export type PackageSet = PackageSetEntry[];
