@@ -190,7 +190,7 @@ export class Evaluator {
             [...edges, ...newEdges],
           );
           // direct backtracking to package from a set
-          if (!this.packageSets.find((ps) => ps.find((entry) => entry[0] === currentRequirement.name))) {
+          if (!currentRequirement.peer && !this.packageSets.find((ps) => ps.find((entry) => entry[0] === currentRequirement.name))) {
             break;
           }
         }
@@ -198,14 +198,23 @@ export class Evaluator {
       if (conflictState.state === State.CONFLICT) {
         this.heuristics[currentRequirement.name].conflictPotential++;
         // create set
-        const parent = edges.find((e) => e[1] === currentRequirement.name)?.[0];
-        const packageSet = this.packageSets.find((ps) => ps.find((entry) => entry[0] === parent)) || [];
-        packageSet.push([currentRequirement.name, currentRequirement.peer]);
-        edges.forEach((e) => {
-          if (e[1] === currentRequirement.name && !packageSet.find((entry) => entry[0] === e[0])) {
-            packageSet.push([e[0], false]);
+        if (currentRequirement.peer) {
+          const parent = edges.find((e) => e[1] === currentRequirement.name)?.[0];
+          const oldPackageSet = this.packageSets.find((ps) => ps.find((entry) => entry[0] === parent));
+          let packageSet: PackageSet;
+          if (!oldPackageSet) {
+            packageSet = [];
+            this.packageSets.push(packageSet);
+          } else {
+            packageSet = oldPackageSet;
           }
-        });
+          packageSet.push([currentRequirement.name, currentRequirement.peer]);
+          edges.forEach((e) => {
+            if (e[1] === currentRequirement.name && !packageSet.find((entry) => entry[0] === e[0])) {
+              packageSet.push([e[0], false]);
+            }
+          });
+        }
       }
       return conflictState;
     } else {

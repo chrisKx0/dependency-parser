@@ -116,7 +116,7 @@ class Installer {
                 delete packageJson.optionalDependencies[resolvedPackage.name];
             }
         }
-        (0, fs_1.writeFileSync)(path, JSON.stringify(packageJson, null, 2), { encoding: 'utf8' });
+        (0, fs_1.writeFileSync)(path, JSON.stringify(packageJson, null, 2) + '\n', { encoding: 'utf8' });
     }
     isToolInstalled(tool) {
         try {

@@ -118,7 +118,7 @@ export class Installer {
         delete packageJson.optionalDependencies[resolvedPackage.name];
       }
     }
-    writeFileSync(path, JSON.stringify(packageJson, null, 2), { encoding: 'utf8' });
+    writeFileSync(path, JSON.stringify(packageJson, null, 2) + '\n', { encoding: 'utf8' });
   }
 
   private isToolInstalled(tool: PackageManager | 'ng' | 'nx') {
