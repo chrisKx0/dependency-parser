@@ -12,6 +12,17 @@ function areResolvedPackages(array) {
 }
 exports.areResolvedPackages = areResolvedPackages;
 class Installer {
+    createMetricsFile(metrics) {
+        let metricsString = '';
+        for (const [metric, value] of Object.entries(metrics)) {
+            metricsString += `${metric.replace(/([A-Z])/g, ' $1').toLowerCase()}: ${value}\n`;
+        }
+        const path = __dirname + '/../../data';
+        if (!(0, fs_1.existsSync)(path)) {
+            (0, fs_1.mkdirSync)(path);
+        }
+        (0, fs_1.writeFileSync)(`${path}/metrics_log_${Date.now()}.txt`, metricsString, { encoding: 'utf8' });
+    }
     // TODO: add different error types that can be caught in main that messages get created there -> only needed when ALL messages should be hidden in unattended
     install(packageManager, path, nxVersion, ngPackages, runMigrations = false) {
         return tslib_1.__awaiter(this, void 0, void 0, function* () {

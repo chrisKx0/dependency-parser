@@ -1,18 +1,31 @@
 import { execSync } from 'child_process';
 import { validate } from 'compare-versions';
-import { readFileSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { lockFileExists } from 'nx/src/plugins/js/lock-file/lock-file';
 import { NxJsonConfiguration } from 'nx/src/config/nx-json';
 import { PackageManager } from 'nx/src/utils/package-manager';
 import { PackageJson } from 'nx/src/utils/package-json';
 
-import { createMessage, PackageRequirement, Severity, ResolvedPackage } from './util';
+import { createMessage, PackageRequirement, Severity, ResolvedPackage, Metrics } from './util';
 
 export function areResolvedPackages(array: ResolvedPackage[] | PackageRequirement[]): array is ResolvedPackage[] {
   return Array.isArray(array) && (!array.length || !!(array[0] as ResolvedPackage).semVerInfo);
 }
 
 export class Installer {
+  public createMetricsFile(metrics: Metrics) {
+    let metricsString = '';
+    for (const [metric, value] of Object.entries(metrics)) {
+      metricsString += `${metric.replace(/([A-Z])/g, ' $1').toLowerCase()}: ${value}\n`;
+    }
+    // TODO: remove data from assets and /../.. from this path + in constant?
+    const path = __dirname + '/../../data';
+    if (!existsSync(path)) {
+      mkdirSync(path);
+    }
+    writeFileSync(`${path}/metrics_log_${Date.now()}.txt`, metricsString, { encoding: 'utf8' });
+  }
+
   // TODO: add different error types that can be caught in main that messages get created there -> only needed when ALL messages should be hidden in unattended
   public async install(packageManager: string, path: string, nxVersion?: string, ngPackages?: ResolvedPackage[], runMigrations = false) {
     // nx migrate

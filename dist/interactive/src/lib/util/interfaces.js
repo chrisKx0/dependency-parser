@@ -6,7 +6,8 @@ exports.PACKAGE_BUNDLES = ['@nx', '@angular'];
 var ArgumentType;
 (function (ArgumentType) {
     ArgumentType["ALL_DEPENDENCIES"] = "all-dependencies";
-    ArgumentType["FORCE_REGENERATION"] = "force-regeneration";
+    ArgumentType["COLLECT_METRICS"] = "collect-metrics";
+    ArgumentType["FORCE"] = "force";
     ArgumentType["INSTALL"] = "install";
     ArgumentType["MAJOR_VERSIONS"] = "major-versions";
     ArgumentType["MINOR_VERSIONS"] = "minor-versions";

@@ -1,18 +1,22 @@
 import { ArgumentsCamelCase } from 'yargs';
-import { ArgsUnattended, ConflictState, PackageRequirement } from './util';
+import { ArgsUnattended, ConflictState, PackageRequirement, Metrics } from './util';
 export declare class Evaluator {
     private readonly allowedMajorVersions;
     private readonly allowedMinorAndPatchVersions;
     private readonly allowPreReleases;
     private readonly pinVersions;
-    private readonly forceRegeneration;
+    private readonly force;
     private readonly client;
     private readonly heuristics;
     private directDependencies;
+    private metrics;
     private packageSets;
-    constructor(allowedMajorVersions?: number, allowedMinorAndPatchVersions?: number, allowPreReleases?: boolean, pinVersions?: boolean, forceRegeneration?: boolean);
+    constructor(allowedMajorVersions?: number, allowedMinorAndPatchVersions?: number, allowPreReleases?: boolean, pinVersions?: boolean, force?: boolean);
     prepare(args: ArgumentsCamelCase | ArgsUnattended): Promise<PackageRequirement[]>;
-    evaluate(openRequirements: PackageRequirement[]): Promise<ConflictState>;
+    evaluate(openRequirements: PackageRequirement[]): Promise<{
+        conflictState: ConflictState;
+        metrics: Metrics;
+    }>;
     private evaluationStep;
     private addDependenciesToOpenSet;
     private createHeuristics;

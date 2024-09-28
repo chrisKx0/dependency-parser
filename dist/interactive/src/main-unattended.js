@@ -24,7 +24,8 @@ function run() {
         // run evaluation
         let conflictState;
         try {
-            conflictState = yield evaluator.evaluate(openRequirements);
+            const result = yield evaluator.evaluate(openRequirements);
+            conflictState = result.conflictState;
         }
         catch (e) {
             conflictState = { state: lib_1.State.CONFLICT };

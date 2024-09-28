@@ -17,16 +17,22 @@ function run(args) {
         const allowPreReleases = args[lib_1.ArgumentType.PRE_RELEASE] != null
             ? !!args[lib_1.ArgumentType.PRE_RELEASE]
             : showPrompts && (yield (0, lib_1.promptQuestion)('allow_pre_releases'));
+        const collectMetrics = !!args[lib_1.ArgumentType.COLLECT_METRICS];
         const pinVersions = args[lib_1.ArgumentType.KEEP_VERSIONS] != null
             ? !!args[lib_1.ArgumentType.KEEP_VERSIONS]
             : showPrompts && (yield (0, lib_1.promptQuestion)('keep_versions'));
-        const forceRegeneration = !!args[lib_1.ArgumentType.FORCE_REGENERATION];
+        const force = !!args[lib_1.ArgumentType.FORCE];
         // initialize evaluator
-        const evaluator = new lib_1.Evaluator(allowedMajorVersions, allowedMinorAndPatchVersions, allowPreReleases, pinVersions, forceRegeneration);
+        const evaluator = new lib_1.Evaluator(allowedMajorVersions, allowedMinorAndPatchVersions, allowPreReleases, pinVersions, force);
+        let startTime;
+        let endTime;
         // show spinner during preparation
         let spinner = new clui_1.Spinner('Preparing dependency resolution...');
         spinner.start();
+        startTime = performance.now();
         let openRequirements = yield evaluator.prepare(args);
+        endTime = performance.now();
+        const durationPreparation = (endTime - startTime) / 1000;
         spinner.stop();
         // let user choose the packages he likes to include in package resolution
         if (showPrompts && !args[lib_1.ArgumentType.ALL_DEPENDENCIES]) {
@@ -41,9 +47,12 @@ function run(args) {
         // show spinner during dependency resolution
         spinner = new clui_1.Spinner('Performing dependency resolution...');
         spinner.start();
+        startTime = performance.now();
+        let result;
         let conflictState;
         try {
-            conflictState = yield evaluator.evaluate(openRequirements);
+            result = yield evaluator.evaluate(openRequirements);
+            conflictState = result.conflictState;
             spinner.stop();
         }
         catch (e) {
@@ -51,9 +60,14 @@ function run(args) {
             spinner.stop();
             (0, lib_1.createMessage)(e.message, lib_1.Severity.ERROR);
         }
+        endTime = performance.now();
+        const durationEvaluation = (endTime - startTime) / 1000;
         if (conflictState.state === 'OK' && (0, lib_1.areResolvedPackages)(conflictState.result)) {
             (0, lib_1.createResolvedPackageOutput)(conflictState.result);
             const installer = new lib_1.Installer();
+            if (collectMetrics) {
+                installer.createMetricsFile(Object.assign(Object.assign({}, result.metrics), { durationPreparation, durationEvaluation }));
+            }
             const path = (_c = args[lib_1.ArgumentType.PATH]) !== null && _c !== void 0 ? _c : process.cwd();
             const packageJsonPath = path + '/package.json';
             const nxPath = path + '/nx.json';
@@ -117,11 +131,17 @@ function run(args) {
     boolean: true,
     description: 'Resolve all dependencies of package.json',
 })
-    .option(lib_1.ArgumentType.FORCE_REGENERATION, {
+    .option(lib_1.ArgumentType.COLLECT_METRICS, {
+    alias: 'c',
+    type: 'boolean',
+    boolean: true,
+    description: 'Collect performance metrics and save to file',
+})
+    .option(lib_1.ArgumentType.FORCE, {
     alias: 'f',
     type: 'boolean',
     boolean: true,
-    description: 'Force cache regeneration',
+    description: 'Forcibly try every version combination',
 })
     .option(lib_1.ArgumentType.INSTALL, {
     alias: 'i',

@@ -34,7 +34,8 @@ export async function run() {
   // run evaluation
   let conflictState: ConflictState;
   try {
-    conflictState = await evaluator.evaluate(openRequirements);
+    const result = await evaluator.evaluate(openRequirements);
+    conflictState = result.conflictState;
   } catch (e) {
     conflictState = { state: State.CONFLICT };
   }

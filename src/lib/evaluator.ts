@@ -23,6 +23,7 @@ import {
   VersionRange,
   EdgeWithPeer,
   PackageSet,
+  Metrics,
 } from './util';
 
 function isArgumentsCamelCase(args: ArgumentsCamelCase | ArgsUnattended): args is ArgumentsCamelCase {
@@ -33,6 +34,13 @@ export class Evaluator {
   private readonly client = new RegistryClient();
   private readonly heuristics: Record<string, Heuristics> = {};
   private directDependencies: string[];
+  private metrics: Metrics = {
+    checkedDependencies: 0,
+    checkedPeers: 0,
+    checkedVersions: 0,
+    resolvedPackages: 0,
+    resolvedPeers: 0,
+  };
   private packageSets: PackageSet[] = [];
 
   constructor(
@@ -40,7 +48,7 @@ export class Evaluator {
     private readonly allowedMinorAndPatchVersions = 10,
     private readonly allowPreReleases = false,
     private readonly pinVersions = false,
-    private readonly forceRegeneration = false,
+    private readonly force = false,
   ) {}
 
   public async prepare(args: ArgumentsCamelCase | ArgsUnattended): Promise<PackageRequirement[]> {
@@ -66,7 +74,7 @@ export class Evaluator {
     this.directDependencies = openRequirements.map((pr) => pr.name);
 
     // load cache from disk
-    this.client.readDataFromFiles(this.forceRegeneration);
+    this.client.readDataFromFiles();
 
     // get pinned version from command or package.json
     const pinnedVersions: Record<string, string> = isArgumentsCamelCase(args)
@@ -104,11 +112,11 @@ export class Evaluator {
     return openRequirements;
   }
 
-  public async evaluate(openRequirements: PackageRequirement[]) {
-    const result = await this.evaluationStep([], [], openRequirements, []);
+  public async evaluate(openRequirements: PackageRequirement[]): Promise<{ conflictState: ConflictState; metrics: Metrics }> {
+    const conflictState = await this.evaluationStep([], [], openRequirements, []);
     // save cache to disk
     this.client.writeDataToFiles();
-    return result;
+    return { conflictState, metrics: this.metrics };
   }
 
   private async evaluationStep(
@@ -155,13 +163,23 @@ export class Evaluator {
       compatibleVersions = this.getVersionsInMinorAndPatchRange(compatibleVersions);
 
       // remove set if needed
-      this.packageSets = this.packageSets.filter((ps) =>
-        ps.filter((entry) => entry[1]).some((entry) => !selectedPackageVersions.map((rp) => rp.name).includes(entry[0])),
-      );
+      if (!this.force) {
+        this.packageSets = this.packageSets.filter((ps) =>
+          ps.filter((entry) => entry[1]).some((entry) => !selectedPackageVersions.map((rp) => rp.name).includes(entry[0])),
+        );
+      }
+
+      // collect metrics
+      this.metrics.checkedDependencies++;
+      if (currentRequirement.peer) {
+        this.metrics.checkedPeers++;
+      }
 
       let conflictState: ConflictState = { state: State.CONFLICT };
 
       for (const versionToExplore of compatibleVersions) {
+        // collect metric
+        this.metrics.checkedVersions++;
         if (conflictState.state === State.CONFLICT) {
           const packageDetails = await this.client.getPackageDetails(currentRequirement.name, versionToExplore);
           if (
@@ -190,7 +208,7 @@ export class Evaluator {
             [...edges, ...newEdges],
           );
           // direct backtracking to package from a set
-          if (!currentRequirement.peer && !this.packageSets.find((ps) => ps.find((entry) => entry[0] === currentRequirement.name))) {
+          if (!this.force && !currentRequirement.peer && !this.packageSets.find((ps) => ps.find((entry) => entry[0] === currentRequirement.name))) {
             break;
           }
         }
@@ -198,7 +216,7 @@ export class Evaluator {
       if (conflictState.state === State.CONFLICT) {
         this.heuristics[currentRequirement.name].conflictPotential++;
         // create set
-        if (currentRequirement.peer) {
+        if (!this.force && currentRequirement.peer) {
           const parent = edges.find((e) => e[1] === currentRequirement.name)?.[0];
           const oldPackageSet = this.packageSets.find((ps) => ps.find((entry) => entry[0] === parent));
           let packageSet: PackageSet;
@@ -218,6 +236,10 @@ export class Evaluator {
       }
       return conflictState;
     } else {
+      // collect metrics
+      this.metrics.resolvedPackages = closedRequirements.length;
+      this.metrics.resolvedPeers = selectedPackageVersions.length;
+
       return { result: selectedPackageVersions, state: State.OK };
     }
   }

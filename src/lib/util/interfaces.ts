@@ -5,7 +5,8 @@ export const PACKAGE_BUNDLES = ['@nx', '@angular'];
 
 export enum ArgumentType {
   ALL_DEPENDENCIES = 'all-dependencies',
-  FORCE_REGENERATION = 'force-regeneration',
+  COLLECT_METRICS = 'collect-metrics',
+  FORCE = 'force',
   INSTALL = 'install',
   MAJOR_VERSIONS = 'major-versions',
   MINOR_VERSIONS = 'minor-versions',
@@ -40,6 +41,16 @@ export interface Heuristics {
   peers?: string[];
   pinnedVersion?: string;
   versionRange: VersionRange;
+}
+
+export interface Metrics {
+  checkedDependencies: number;
+  checkedPeers: number;
+  checkedVersions: number;
+  durationPreparation?: number;
+  durationEvaluation?: number;
+  resolvedPeers: number;
+  resolvedPackages: number;
 }
 
 export interface PackageDetails {

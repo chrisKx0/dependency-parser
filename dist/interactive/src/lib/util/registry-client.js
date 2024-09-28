@@ -5,8 +5,7 @@ const tslib_1 = require("tslib");
 const fs_1 = require("fs");
 const lodash_1 = require("lodash");
 const query_registry_1 = require("query-registry");
-const DETAILS_FILENAME = 'details.json';
-// const VERSIONS_FILENAME = 'versions.json';
+const DETAILS_FILENAME = 'details';
 class RegistryClient {
     constructor(details = {}, versions = {}, path = __dirname + '/../../data') {
         this.details = details;
@@ -49,30 +48,20 @@ class RegistryClient {
             return versions;
         });
     }
-    readDataFromFiles(forceRegeneration = false) {
-        if (forceRegeneration) {
-            return;
-        }
+    readDataFromFiles() {
         try {
-            const details = (0, fs_1.readFileSync)(`${this.path}/${DETAILS_FILENAME}`, { encoding: 'utf8' });
+            const details = (0, fs_1.readFileSync)(`${this.path}/${DETAILS_FILENAME}.json`, { encoding: 'utf8' });
             this.details = JSON.parse(details);
         }
         catch (e) {
             // file just doesn't exist
         }
-        // try {
-        //   const versions = readFileSync(`${this.path}/${VERSIONS_FILENAME}`, { encoding: 'utf8' });
-        //   this.versions = JSON.parse(versions);
-        // } catch (e) {
-        //   // file just doesn't exist
-        // }
     }
     writeDataToFiles() {
         if (!(0, fs_1.existsSync)(this.path)) {
             (0, fs_1.mkdirSync)(this.path);
         }
-        (0, fs_1.writeFileSync)(`${this.path}/${DETAILS_FILENAME}`, JSON.stringify(this.details), { encoding: 'utf8' });
-        // writeFileSync(`${this.path}/${VERSIONS_FILENAME}`, JSON.stringify(this.versions), { encoding: 'utf8' });
+        (0, fs_1.writeFileSync)(`${this.path}/${DETAILS_FILENAME}.json`, JSON.stringify(this.details), { encoding: 'utf8' });
     }
     calculateMeanSize(sizes) {
         if (!sizes.length) {

@@ -18,10 +18,13 @@ import {
   promptQuestion,
   Severity,
   areResolvedPackages,
+  Metrics,
 } from './lib';
 
 async function run(args: ArgumentsCamelCase) {
   // initial user inputs
+  const collectMetrics = !!args[ArgumentType.COLLECT_METRICS];
+  const force = !!args[ArgumentType.FORCE];
   const showPrompts = !args[ArgumentType.SKIP_PROMPTS];
   const allowedMajorVersions =
     (args[ArgumentType.MAJOR_VERSIONS] as number) ?? (!showPrompts ? 2 : await promptQuestion<number>('major_version_count'));
@@ -35,17 +38,22 @@ async function run(args: ArgumentsCamelCase) {
     args[ArgumentType.KEEP_VERSIONS] != null
       ? !!args[ArgumentType.KEEP_VERSIONS]
       : showPrompts && (await promptQuestion<boolean>('keep_versions'));
-  const forceRegeneration = !!args[ArgumentType.FORCE_REGENERATION];
 
   // initialize evaluator
-  const evaluator = new Evaluator(allowedMajorVersions, allowedMinorAndPatchVersions, allowPreReleases, pinVersions, forceRegeneration);
+  const evaluator = new Evaluator(allowedMajorVersions, allowedMinorAndPatchVersions, allowPreReleases, pinVersions, force);
+
+  let startTime: number;
+  let endTime: number;
 
   // show spinner during preparation
   let spinner = new Spinner('Preparing dependency resolution...');
   spinner.start();
+  startTime = performance.now();
 
   let openRequirements = await evaluator.prepare(args);
 
+  endTime = performance.now();
+  const durationPreparation = (endTime - startTime) / 1000;
   spinner.stop();
 
   // let user choose the packages he likes to include in package resolution
@@ -61,10 +69,13 @@ async function run(args: ArgumentsCamelCase) {
   // show spinner during dependency resolution
   spinner = new Spinner('Performing dependency resolution...');
   spinner.start();
+  startTime = performance.now();
 
+  let result: { conflictState: ConflictState; metrics: Metrics };
   let conflictState: ConflictState;
   try {
-    conflictState = await evaluator.evaluate(openRequirements);
+    result = await evaluator.evaluate(openRequirements);
+    conflictState = result.conflictState;
     spinner.stop();
   } catch (e) {
     conflictState = { state: State.CONFLICT };
@@ -72,10 +83,18 @@ async function run(args: ArgumentsCamelCase) {
     createMessage(e.message, Severity.ERROR);
   }
 
+  endTime = performance.now();
+  const durationEvaluation = (endTime - startTime) / 1000;
+
   if (conflictState.state === 'OK' && areResolvedPackages(conflictState.result)) {
     createResolvedPackageOutput(conflictState.result);
 
     const installer = new Installer();
+
+    if (collectMetrics) {
+      installer.createMetricsFile({ ...result.metrics, durationPreparation, durationEvaluation });
+    }
+
     const path = (args[ArgumentType.PATH] as string) ?? process.cwd();
     const packageJsonPath = path + '/package.json';
     const nxPath = path + '/nx.json';
@@ -153,11 +172,17 @@ yargs(hideBin(process.argv))
     boolean: true,
     description: 'Resolve all dependencies of package.json',
   })
-  .option(ArgumentType.FORCE_REGENERATION, {
+  .option(ArgumentType.COLLECT_METRICS, {
+    alias: 'c',
+    type: 'boolean',
+    boolean: true,
+    description: 'Collect performance metrics and save to file',
+  })
+  .option(ArgumentType.FORCE, {
     alias: 'f',
     type: 'boolean',
     boolean: true,
-    description: 'Force cache regeneration',
+    description: 'Forcibly try every version combination',
   })
   .option(ArgumentType.INSTALL, {
     alias: 'i',

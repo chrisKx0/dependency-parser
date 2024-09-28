@@ -6,7 +6,7 @@ export declare class RegistryClient {
     constructor(details?: Record<string, PackageDetails>, versions?: Record<string, Versions>, path?: string);
     getPackageDetails(name: string, version: string): Promise<PackageDetails>;
     getAllVersionsFromRegistry(name: string): Promise<Versions>;
-    readDataFromFiles(forceRegeneration?: boolean): void;
+    readDataFromFiles(): void;
     writeDataToFiles(): void;
     private calculateMeanSize;
 }
