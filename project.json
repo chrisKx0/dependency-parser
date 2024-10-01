@@ -29,11 +29,12 @@
       }
     },
     "test": {
-      "executor": "@nx/vite:test",
+      "executor": "@nx/jest:jest",
       "outputs": ["{options.reportsDirectory}"],
       "options": {
         "passWithNoTests": true,
-        "reportsDirectory": "coverage/dependency-parser"
+        "reportsDirectory": "coverage/dependency-parser",
+        "jestConfig": "jest.config.ts"
       }
     }
   },

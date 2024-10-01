@@ -1,6 +1,0 @@
-{
-  "peerDependencies": {
-    "@angular/common": "18.0.4",
-    "keycloak-angular": "16.0.1"
-  }
-}
