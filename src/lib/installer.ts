@@ -18,7 +18,6 @@ export class Installer {
     for (const [metric, value] of Object.entries(metrics)) {
       metricsString += `${metric.replace(/([A-Z])/g, ' $1').toLowerCase()}: ${value}\n`;
     }
-    // TODO: remove data from assets and /../.. from this path + in constant?
     const path = __dirname + '/../../data';
     if (!existsSync(path)) {
       mkdirSync(path);

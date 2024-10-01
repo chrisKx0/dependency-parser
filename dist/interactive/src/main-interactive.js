@@ -11,29 +11,30 @@ function run(args) {
     var _a, _b, _c, _d;
     return tslib_1.__awaiter(this, void 0, void 0, function* () {
         // initial user inputs
+        const collectMetrics = !!args[lib_1.ArgumentType.COLLECT_METRICS];
+        const force = !!args[lib_1.ArgumentType.FORCE];
         const showPrompts = !args[lib_1.ArgumentType.SKIP_PROMPTS];
         const allowedMajorVersions = (_a = args[lib_1.ArgumentType.MAJOR_VERSIONS]) !== null && _a !== void 0 ? _a : (!showPrompts ? 2 : yield (0, lib_1.promptQuestion)('major_version_count'));
         const allowedMinorAndPatchVersions = (_b = args[lib_1.ArgumentType.MINOR_VERSIONS]) !== null && _b !== void 0 ? _b : (!showPrompts ? 10 : yield (0, lib_1.promptQuestion)('minor_version_count'));
         const allowPreReleases = args[lib_1.ArgumentType.PRE_RELEASE] != null
             ? !!args[lib_1.ArgumentType.PRE_RELEASE]
             : showPrompts && (yield (0, lib_1.promptQuestion)('allow_pre_releases'));
-        const collectMetrics = !!args[lib_1.ArgumentType.COLLECT_METRICS];
         const pinVersions = args[lib_1.ArgumentType.KEEP_VERSIONS] != null
             ? !!args[lib_1.ArgumentType.KEEP_VERSIONS]
             : showPrompts && (yield (0, lib_1.promptQuestion)('keep_versions'));
-        const force = !!args[lib_1.ArgumentType.FORCE];
         // initialize evaluator
         const evaluator = new lib_1.Evaluator(allowedMajorVersions, allowedMinorAndPatchVersions, allowPreReleases, pinVersions, force);
         let startTime;
         let endTime;
         // show spinner during preparation
         let spinner = new clui_1.Spinner('Preparing dependency resolution...');
-        spinner.start();
+        // spinner.start();
         startTime = performance.now();
+        console.debug(args);
         let openRequirements = yield evaluator.prepare(args);
         endTime = performance.now();
         const durationPreparation = (endTime - startTime) / 1000;
-        spinner.stop();
+        // spinner.stop();
         // let user choose the packages he likes to include in package resolution
         if (showPrompts && !args[lib_1.ArgumentType.ALL_DEPENDENCIES]) {
             const names = openRequirements.map((pr) => pr.name);
@@ -46,18 +47,18 @@ function run(args) {
         }
         // show spinner during dependency resolution
         spinner = new clui_1.Spinner('Performing dependency resolution...');
-        spinner.start();
+        // spinner.start();
         startTime = performance.now();
         let result;
         let conflictState;
         try {
             result = yield evaluator.evaluate(openRequirements);
             conflictState = result.conflictState;
-            spinner.stop();
+            // spinner.stop();
         }
         catch (e) {
             conflictState = { state: lib_1.State.CONFLICT };
-            spinner.stop();
+            // spinner.stop();
             (0, lib_1.createMessage)(e.message, lib_1.Severity.ERROR);
         }
         endTime = performance.now();

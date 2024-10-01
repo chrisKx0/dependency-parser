@@ -2,7 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.State = exports.ArgumentType = exports.PACKAGE_BUNDLES = void 0;
 // array positions must be kept
-exports.PACKAGE_BUNDLES = ['@nx', '@angular'];
+exports.PACKAGE_BUNDLES = ['@nx', '@angular']; // TODO: add nestjs + others?
 var ArgumentType;
 (function (ArgumentType) {
     ArgumentType["ALL_DEPENDENCIES"] = "all-dependencies";

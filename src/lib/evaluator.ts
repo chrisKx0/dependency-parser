@@ -149,6 +149,11 @@ export class Evaluator {
       }
 
       const versionReference = this.getVersionReference(availableVersions, major);
+      // if version requirement is no valid requirement, remove it entirely
+      // @TODO: handle versions that are urls or prefixed: with npm:, file:, etc.
+      if (!validRange(currentRequirement.versionRequirement)) {
+        delete currentRequirement.versionRequirement;
+      }
       let compatibleVersions =
         currentRequirement.versionRequirement && currentRequirement.versionRequirement !== '*'
           ? availableVersions.filter((v) => v && satisfies(v, currentRequirement.versionRequirement.replace('ˆ', '^')))
@@ -161,7 +166,6 @@ export class Evaluator {
             );
 
       compatibleVersions = this.getVersionsInMinorAndPatchRange(compatibleVersions);
-
       // remove set if needed
       if (!this.force) {
         this.packageSets = this.packageSets.filter((ps) =>
@@ -179,19 +183,16 @@ export class Evaluator {
 
       for (const versionToExplore of compatibleVersions) {
         // collect metric
-        this.metrics.checkedVersions++;
         if (conflictState.state === State.CONFLICT) {
-          const packageDetails = await this.client.getPackageDetails(currentRequirement.name, versionToExplore);
-          if (
-            !this.allowPreReleases &&
-            Object.values({ ...packageDetails.dependencies, ...packageDetails.peerDependencies }).some((d) => d.includes('-'))
-          ) {
+          if (!this.allowPreReleases && versionToExplore.includes('-')) {
             continue;
           }
+          this.metrics.checkedVersions++;
+          const packageDetails = await this.client.getPackageDetails(currentRequirement.name, versionToExplore);
           if (packageDetails.peerDependencies) {
-            this.heuristics[currentRequirement.name].peers = Object.keys(packageDetails.peerDependencies).filter((peer) =>
-              this.directDependencies.includes(peer),
-            );
+            this.heuristics[currentRequirement.name].peers = Object.keys(packageDetails.peerDependencies); //.filter((peer) =>
+            // this.directDependencies.includes(peer),
+            // );
           }
           const { newOpenRequirements, newEdges } = await this.addDependenciesToOpenSet(
             packageDetails,
@@ -208,7 +209,12 @@ export class Evaluator {
             [...edges, ...newEdges],
           );
           // direct backtracking to package from a set
-          if (!this.force && !currentRequirement.peer && !this.packageSets.find((ps) => ps.find((entry) => entry[0] === currentRequirement.name))) {
+
+          if (
+            !this.force &&
+            !currentRequirement.peer &&
+            !this.packageSets.find((ps) => ps.find((entry) => entry[0] === currentRequirement.name))
+          ) {
             break;
           }
         }
@@ -356,6 +362,7 @@ export class Evaluator {
     // topological search with peers
     const nodes: string[] = [];
     const edges: Edge[] = [];
+    const indirectEdges: Edge[] = [];
     for (const pr of packageRequirements) {
       const heuristics = this.heuristics[pr.name];
       if (heuristics.peers?.length) {
@@ -366,7 +373,17 @@ export class Evaluator {
           if (!nodes.includes(peer)) {
             nodes.push(peer);
           }
-          edges.push([pr.name, peer]);
+          // only add edges that won't cause cycles
+          if (!indirectEdges.find((e) => e[0] === peer && e[1] === pr.name)) {
+            edges.push([pr.name, peer]);
+            indirectEdges.push([pr.name, peer]);
+          }
+          // track edges from indirect parents
+          edges.forEach((e) => {
+            if (e[1] === pr.name) {
+              indirectEdges.push([e[0], peer]);
+            }
+          });
         }
       }
     }

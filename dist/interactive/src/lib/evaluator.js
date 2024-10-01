@@ -116,6 +116,11 @@ class Evaluator {
                     availableVersions = availableVersions.filter((v) => v && (0, compare_versions_1.satisfies)(v, pinnedVersion));
                 }
                 const versionReference = this.getVersionReference(availableVersions, semver_1.major);
+                // if version requirement is no valid requirement, remove it entirely
+                // @TODO: handle versions that are urls or prefixed: with npm:, file:, etc.
+                if (!(0, semver_1.validRange)(currentRequirement.versionRequirement)) {
+                    delete currentRequirement.versionRequirement;
+                }
                 let compatibleVersions = currentRequirement.versionRequirement && currentRequirement.versionRequirement !== '*'
                     ? availableVersions.filter((v) => v && (0, compare_versions_1.satisfies)(v, currentRequirement.versionRequirement.replace('ˆ', '^')))
                     : availableVersions.filter((v) => v &&
@@ -135,15 +140,16 @@ class Evaluator {
                 let conflictState = { state: util_1.State.CONFLICT };
                 for (const versionToExplore of compatibleVersions) {
                     // collect metric
-                    this.metrics.checkedVersions++;
                     if (conflictState.state === util_1.State.CONFLICT) {
-                        const packageDetails = yield this.client.getPackageDetails(currentRequirement.name, versionToExplore);
-                        if (!this.allowPreReleases &&
-                            Object.values(Object.assign(Object.assign({}, packageDetails.dependencies), packageDetails.peerDependencies)).some((d) => d.includes('-'))) {
+                        if (!this.allowPreReleases && versionToExplore.includes('-')) {
                             continue;
                         }
+                        this.metrics.checkedVersions++;
+                        const packageDetails = yield this.client.getPackageDetails(currentRequirement.name, versionToExplore);
                         if (packageDetails.peerDependencies) {
-                            this.heuristics[currentRequirement.name].peers = Object.keys(packageDetails.peerDependencies).filter((peer) => this.directDependencies.includes(peer));
+                            this.heuristics[currentRequirement.name].peers = Object.keys(packageDetails.peerDependencies); //.filter((peer) =>
+                            // this.directDependencies.includes(peer),
+                            // );
                         }
                         const { newOpenRequirements, newEdges } = yield this.addDependenciesToOpenSet(packageDetails, closedRequirements, openRequirements);
                         conflictState = yield this.evaluationStep(currentRequirement.peer &&
@@ -151,7 +157,12 @@ class Evaluator {
                             ? [...selectedPackageVersions, { name: packageDetails.name, semVerInfo: packageDetails.version }]
                             : selectedPackageVersions, [...closedRequirements, currentRequirement], newOpenRequirements, [...edges, ...newEdges]);
                         // direct backtracking to package from a set
-                        if (!this.force && !currentRequirement.peer && !this.packageSets.find((ps) => ps.find((entry) => entry[0] === currentRequirement.name))) {
+                        if (currentRequirement.peer) {
+                            console.debug(currentRequirement.name, currentRequirement.versionRequirement);
+                        }
+                        if (!this.force &&
+                            !currentRequirement.peer &&
+                            !this.packageSets.find((ps) => ps.find((entry) => entry[0] === currentRequirement.name))) {
                             break;
                         }
                     }
@@ -283,6 +294,7 @@ class Evaluator {
         // topological search with peers
         const nodes = [];
         const edges = [];
+        const indirectEdges = [];
         for (const pr of packageRequirements) {
             const heuristics = this.heuristics[pr.name];
             if ((_a = heuristics.peers) === null || _a === void 0 ? void 0 : _a.length) {
@@ -293,7 +305,17 @@ class Evaluator {
                     if (!nodes.includes(peer)) {
                         nodes.push(peer);
                     }
-                    edges.push([pr.name, peer]);
+                    // only add edges that won't cause cycles
+                    if (!indirectEdges.find((e) => e[0] === peer && e[1] === pr.name)) {
+                        edges.push([pr.name, peer]);
+                        indirectEdges.push([pr.name, peer]);
+                    }
+                    // track edges from indirect parents
+                    edges.forEach((e) => {
+                        if (e[1] === pr.name) {
+                            indirectEdges.push([e[0], peer]);
+                        }
+                    });
                 }
             }
         }

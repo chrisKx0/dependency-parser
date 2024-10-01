@@ -10,7 +10,7 @@ export class RegistryClient {
   constructor(
     private details: Record<string, PackageDetails> = {},
     private versions: Record<string, Versions> = {},
-    private readonly path = __dirname + '/../../data', // TODO: remove data from assets and /../.. from this path
+    private readonly path = __dirname + '/../../../data',
   ) {}
 
   public async getPackageDetails(name: string, version: string): Promise<PackageDetails> {
