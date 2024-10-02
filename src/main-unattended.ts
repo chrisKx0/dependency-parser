@@ -45,7 +45,7 @@ export async function run() {
     createResolvedPackageOutput(conflictState.result, false);
     const installer = new Installer();
     installer.updatePackageJson(conflictState.result, packageJsonPath + '/package.json');
-    const nxVersion = conflictState.result.find((rp) => rp.name.startsWith(PACKAGE_BUNDLES[0]))?.semVerInfo || 'latest';
+    const nxVersion = conflictState.result.find((rp) => rp.name.startsWith(PACKAGE_BUNDLES[0]))?.semVerInfo;
     if (nxVersion) {
       core.info('Nx version: ' + nxVersion);
       core.setOutput('nx-version', nxVersion);

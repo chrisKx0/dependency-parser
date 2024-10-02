@@ -30,8 +30,6 @@ jobs:
             pnpm nx migrate --run-migrations=migrations.json
             rm migrations.json
           fi
-
-          pnpm format
         if: ${{ steps.dp.outputs.nx-version }}
       - name: Create pull request
         uses: peter-evans/create-pull-request@v6
