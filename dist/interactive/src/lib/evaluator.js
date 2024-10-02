@@ -97,7 +97,6 @@ class Evaluator {
         return tslib_1.__awaiter(this, void 0, void 0, function* () {
             if (openRequirements.length) {
                 const currentRequirement = openRequirements.shift();
-                console.debug(currentRequirement);
                 let version = currentRequirement.peer && ((_a = selectedPackageVersions.find((rp) => rp.name === currentRequirement.name)) === null || _a === void 0 ? void 0 : _a.semVerInfo);
                 if (!version) {
                     // bundled packages need to be of the same version

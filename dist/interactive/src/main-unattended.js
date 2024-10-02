@@ -35,8 +35,9 @@ function run() {
             (0, lib_1.createResolvedPackageOutput)(conflictState.result, false);
             const installer = new lib_1.Installer();
             installer.updatePackageJson(conflictState.result, packageJsonPath + '/package.json');
-            const nxVersion = (_a = conflictState.result.find((rp) => rp.name.startsWith(lib_1.PACKAGE_BUNDLES[0]))) === null || _a === void 0 ? void 0 : _a.semVerInfo;
+            const nxVersion = ((_a = conflictState.result.find((rp) => rp.name.startsWith(lib_1.PACKAGE_BUNDLES[0]))) === null || _a === void 0 ? void 0 : _a.semVerInfo) || 'latest';
             if (nxVersion) {
+                core.info('Nx version: ' + nxVersion);
                 core.setOutput('nx-version', nxVersion);
             }
         }
