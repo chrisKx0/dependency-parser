@@ -28,13 +28,12 @@ function run(args) {
         let endTime;
         // show spinner during preparation
         let spinner = new clui_1.Spinner('Preparing dependency resolution...');
-        // spinner.start();
+        spinner.start();
         startTime = performance.now();
-        console.debug(args);
         let openRequirements = yield evaluator.prepare(args);
         endTime = performance.now();
         const durationPreparation = (endTime - startTime) / 1000;
-        // spinner.stop();
+        spinner.stop();
         // let user choose the packages he likes to include in package resolution
         if (showPrompts && !args[lib_1.ArgumentType.ALL_DEPENDENCIES]) {
             const names = openRequirements.map((pr) => pr.name);
@@ -47,18 +46,18 @@ function run(args) {
         }
         // show spinner during dependency resolution
         spinner = new clui_1.Spinner('Performing dependency resolution...');
-        // spinner.start();
+        spinner.start();
         startTime = performance.now();
         let result;
         let conflictState;
         try {
             result = yield evaluator.evaluate(openRequirements);
             conflictState = result.conflictState;
-            // spinner.stop();
+            spinner.stop();
         }
         catch (e) {
             conflictState = { state: lib_1.State.CONFLICT };
-            // spinner.stop();
+            spinner.stop();
             (0, lib_1.createMessage)(e.message, lib_1.Severity.ERROR);
         }
         endTime = performance.now();

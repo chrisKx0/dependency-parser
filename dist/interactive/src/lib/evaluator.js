@@ -13,13 +13,13 @@ function isArgumentsCamelCase(args) {
     return !!args._;
 }
 class Evaluator {
-    constructor(allowedMajorVersions = 2, allowedMinorAndPatchVersions = 10, allowPreReleases = false, pinVersions = false, force = false) {
+    constructor(allowedMajorVersions = 2, allowedMinorAndPatchVersions = 10, allowPreReleases = false, pinVersions = false, force = false, client = new util_1.RegistryClient()) {
         this.allowedMajorVersions = allowedMajorVersions;
         this.allowedMinorAndPatchVersions = allowedMinorAndPatchVersions;
         this.allowPreReleases = allowPreReleases;
         this.pinVersions = pinVersions;
         this.force = force;
-        this.client = new util_1.RegistryClient();
+        this.client = client;
         this.heuristics = {};
         this.metrics = {
             checkedDependencies: 0,
@@ -97,7 +97,8 @@ class Evaluator {
         return tslib_1.__awaiter(this, void 0, void 0, function* () {
             if (openRequirements.length) {
                 const currentRequirement = openRequirements.shift();
-                let version = (_a = selectedPackageVersions.find((rp) => rp.name === currentRequirement.name)) === null || _a === void 0 ? void 0 : _a.semVerInfo;
+                console.debug(currentRequirement);
+                let version = currentRequirement.peer && ((_a = selectedPackageVersions.find((rp) => rp.name === currentRequirement.name)) === null || _a === void 0 ? void 0 : _a.semVerInfo);
                 if (!version) {
                     // bundled packages need to be of the same version
                     version = (_b = selectedPackageVersions.find((rp) => util_1.PACKAGE_BUNDLES.some((pb) => rp.name.startsWith(pb) && currentRequirement.name.startsWith(pb)))) === null || _b === void 0 ? void 0 : _b.semVerInfo;
@@ -157,9 +158,6 @@ class Evaluator {
                             ? [...selectedPackageVersions, { name: packageDetails.name, semVerInfo: packageDetails.version }]
                             : selectedPackageVersions, [...closedRequirements, currentRequirement], newOpenRequirements, [...edges, ...newEdges]);
                         // direct backtracking to package from a set
-                        if (currentRequirement.peer) {
-                            console.debug(currentRequirement.name, currentRequirement.versionRequirement);
-                        }
                         if (!this.force &&
                             !currentRequirement.peer &&
                             !this.packageSets.find((ps) => ps.find((entry) => entry[0] === currentRequirement.name))) {
@@ -253,7 +251,7 @@ class Evaluator {
                     const { peerDependencies } = yield this.client.getPackageDetails(name, version);
                     if (peerDependencies) {
                         for (const peerDependency of Object.keys(peerDependencies)) {
-                            if (!peers.includes(peerDependency) && this.directDependencies.includes(peerDependency)) {
+                            if (!peers.includes(peerDependency)) {
                                 peers.push(peerDependency);
                             }
                         }
@@ -296,6 +294,9 @@ class Evaluator {
         const edges = [];
         const indirectEdges = [];
         for (const pr of packageRequirements) {
+            if (pr.peer && !nodes.includes(pr.name)) {
+                nodes.push(pr.name);
+            }
             const heuristics = this.heuristics[pr.name];
             if ((_a = heuristics.peers) === null || _a === void 0 ? void 0 : _a.length) {
                 for (const peer of heuristics.peers) {

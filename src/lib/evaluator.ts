@@ -31,7 +31,6 @@ function isArgumentsCamelCase(args: ArgumentsCamelCase | ArgsUnattended): args i
 }
 
 export class Evaluator {
-  private readonly client = new RegistryClient();
   private readonly heuristics: Record<string, Heuristics> = {};
   private directDependencies: string[];
   private metrics: Metrics = {
@@ -49,7 +48,8 @@ export class Evaluator {
     private readonly allowPreReleases = false,
     private readonly pinVersions = false,
     private readonly force = false,
-  ) {}
+    private readonly client = new RegistryClient(),
+) {}
 
   public async prepare(args: ArgumentsCamelCase | ArgsUnattended): Promise<PackageRequirement[]> {
     // get package.json path from args or current working directory & add filename if necessary
@@ -127,7 +127,7 @@ export class Evaluator {
   ): Promise<ConflictState> {
     if (openRequirements.length) {
       const currentRequirement = openRequirements.shift();
-      let version = selectedPackageVersions.find((rp) => rp.name === currentRequirement.name)?.semVerInfo;
+      let version = currentRequirement.peer && selectedPackageVersions.find((rp) => rp.name === currentRequirement.name)?.semVerInfo;
       if (!version) {
         // bundled packages need to be of the same version
         version = selectedPackageVersions.find((rp) =>
@@ -209,7 +209,6 @@ export class Evaluator {
             [...edges, ...newEdges],
           );
           // direct backtracking to package from a set
-
           if (
             !this.force &&
             !currentRequirement.peer &&
@@ -316,7 +315,7 @@ export class Evaluator {
         const { peerDependencies } = await this.client.getPackageDetails(name, version);
         if (peerDependencies) {
           for (const peerDependency of Object.keys(peerDependencies)) {
-            if (!peers.includes(peerDependency) && this.directDependencies.includes(peerDependency)) {
+            if (!peers.includes(peerDependency)) {
               peers.push(peerDependency);
             }
           }
@@ -364,6 +363,9 @@ export class Evaluator {
     const edges: Edge[] = [];
     const indirectEdges: Edge[] = [];
     for (const pr of packageRequirements) {
+      if (pr.peer && !nodes.includes(pr.name)) {
+        nodes.push(pr.name);
+      }
       const heuristics = this.heuristics[pr.name];
       if (heuristics.peers?.length) {
         for (const peer of heuristics.peers) {

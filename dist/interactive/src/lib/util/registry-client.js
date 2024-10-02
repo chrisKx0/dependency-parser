@@ -7,10 +7,10 @@ const lodash_1 = require("lodash");
 const query_registry_1 = require("query-registry");
 const DETAILS_FILENAME = 'details.json';
 class RegistryClient {
-    constructor(details = {}, versions = {}, path = __dirname + '/../../../data') {
-        this.details = details;
-        this.versions = versions;
+    constructor(path = __dirname + '/../../../data') {
         this.path = path;
+        this.details = {};
+        this.versions = {};
     }
     getPackageDetails(name, version) {
         return tslib_1.__awaiter(this, void 0, void 0, function* () {
@@ -55,7 +55,6 @@ class RegistryClient {
         }
         catch (e) {
             // file just doesn't exist
-            console.warn('details not found');
         }
     }
     writeDataToFiles() {

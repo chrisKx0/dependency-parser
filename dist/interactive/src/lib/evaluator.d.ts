@@ -1,5 +1,5 @@
 import { ArgumentsCamelCase } from 'yargs';
-import { ArgsUnattended, ConflictState, PackageRequirement, Metrics } from './util';
+import { ArgsUnattended, ConflictState, PackageRequirement, RegistryClient, Metrics } from './util';
 export declare class Evaluator {
     private readonly allowedMajorVersions;
     private readonly allowedMinorAndPatchVersions;
@@ -11,7 +11,7 @@ export declare class Evaluator {
     private directDependencies;
     private metrics;
     private packageSets;
-    constructor(allowedMajorVersions?: number, allowedMinorAndPatchVersions?: number, allowPreReleases?: boolean, pinVersions?: boolean, force?: boolean);
+    constructor(allowedMajorVersions?: number, allowedMinorAndPatchVersions?: number, allowPreReleases?: boolean, pinVersions?: boolean, force?: boolean, client?: RegistryClient);
     prepare(args: ArgumentsCamelCase | ArgsUnattended): Promise<PackageRequirement[]>;
     evaluate(openRequirements: PackageRequirement[]): Promise<{
         conflictState: ConflictState;

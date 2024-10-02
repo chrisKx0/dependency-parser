@@ -7,9 +7,9 @@ import { PackageDetails, Versions } from './interfaces';
 const DETAILS_FILENAME = 'details.json';
 
 export class RegistryClient {
+  private details: Record<string, PackageDetails> = {};
+  private versions: Record<string, Versions> = {};
   constructor(
-    private details: Record<string, PackageDetails> = {},
-    private versions: Record<string, Versions> = {},
     private readonly path = __dirname + '/../../../data',
   ) {}
 

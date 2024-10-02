@@ -8,6 +8,7 @@ import {
   createResolvedPackageOutput,
   Evaluator,
   Installer,
+  PACKAGE_BUNDLES,
   State,
 } from './lib';
 
@@ -44,6 +45,10 @@ export async function run() {
     createResolvedPackageOutput(conflictState.result, false);
     const installer = new Installer();
     installer.updatePackageJson(conflictState.result, packageJsonPath + '/package.json');
+    const nxVersion = conflictState.result.find((rp) => rp.name.startsWith(PACKAGE_BUNDLES[0]))?.semVerInfo;
+    if (nxVersion) {
+      core.setOutput('nx-version', nxVersion);
+    }
   } else {
     core.error('Unable to evaluate dependencies with the provided parameters');
   }
