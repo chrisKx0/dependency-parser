@@ -16,11 +16,22 @@ jobs:
           node-version: '20'
           cache: 'pnpm'
       - name: Update peer dependencies
+        id: dp
         uses: chrisKx0/dependency-parser@main
         with:
           allow-pre-releases: true
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
+      - name: Run migration
+        run: |         
+          pnpm nx migrate ${{ steps.dp.outputs.nx-version }}
+
+          if [ -f migrations.json ]; then
+            pnpm nx migrate --run-migrations=migrations.json
+            rm migrations.json
+          fi
+
+          pnpm format
       - name: Create pull request
         uses: peter-evans/create-pull-request@v6
         with:
@@ -28,3 +39,5 @@ jobs:
           title: 'chore(deps): update peer dependencies'
           body: 'Automatic update to peer dependencies by [dependency-parser] github workflow'
           commit-message: 'chore(deps): update peer dependencies'
+      - name: Run tests
+        run: pnpm nx test

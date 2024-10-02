@@ -22,6 +22,9 @@ inputs:
     description: Keep the versions specified in package.json
     default: 'false'
     required: false
+outputs:
+  nx-version:
+    description: Resolved version of Nx
 runs:
   using: node20
   main: 'dist/unattended/index.js'

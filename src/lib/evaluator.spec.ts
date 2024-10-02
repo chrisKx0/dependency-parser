@@ -8,7 +8,7 @@ describe('Test Evaluation', () => {
   test('should evaluate peer dependencies', async () => {
     const args = {
       _: ['u'],
-      path: __dirname + '/../../examples/3',
+      path: __dirname + '/../../examples/1',
     };
 
     const client = new RegistryClient(__dirname + '/../../data');
