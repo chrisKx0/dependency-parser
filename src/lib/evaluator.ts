@@ -32,7 +32,6 @@ function isArgumentsCamelCase(args: ArgumentsCamelCase | ArgsUnattended): args i
 
 export class Evaluator {
   private readonly heuristics: Record<string, Heuristics> = {};
-  private directDependencies: string[];
   private metrics: Metrics = {
     checkedDependencies: 0,
     checkedPeers: 0,
@@ -49,7 +48,7 @@ export class Evaluator {
     private readonly pinVersions = false,
     private readonly force = false,
     private readonly client = new RegistryClient(),
-) {}
+  ) {}
 
   public async prepare(args: ArgumentsCamelCase | ArgsUnattended): Promise<PackageRequirement[]> {
     // get package.json path from args or current working directory & add filename if necessary
@@ -71,7 +70,6 @@ export class Evaluator {
           }))
         : []),
     ];
-    this.directDependencies = openRequirements.map((pr) => pr.name);
 
     // load cache from disk
     this.client.readDataFromFiles();
@@ -144,19 +142,24 @@ export class Evaluator {
       }
 
       const pinnedVersion = this.heuristics[currentRequirement.name].pinnedVersion;
+
       if (validRange(pinnedVersion)) {
         availableVersions = availableVersions.filter((v) => v && satisfies(v, pinnedVersion));
       }
 
       const versionReference = this.getVersionReference(availableVersions, major);
+
       // if version requirement is no valid requirement, remove it entirely
       // @TODO: handle versions that are urls or prefixed: with npm:, file:, etc.
-      if (!validRange(currentRequirement.versionRequirement)) {
+      const versionRequirement = validRange(currentRequirement.versionRequirement);
+
+      if (!versionRequirement) {
         delete currentRequirement.versionRequirement;
       }
+
       let compatibleVersions =
-        currentRequirement.versionRequirement && currentRequirement.versionRequirement !== '*'
-          ? availableVersions.filter((v) => v && satisfies(v, currentRequirement.versionRequirement.replace('ˆ', '^')))
+        versionRequirement && versionRequirement !== '*'
+          ? availableVersions.filter((v) => v && satisfies(v, versionRequirement.replace('ˆ', '^')))
           : availableVersions.filter(
               (v) =>
                 v &&
@@ -172,14 +175,14 @@ export class Evaluator {
           ps.filter((entry) => entry[1]).some((entry) => !selectedPackageVersions.map((rp) => rp.name).includes(entry[0])),
         );
       }
-
       // collect metrics
       this.metrics.checkedDependencies++;
       if (currentRequirement.peer) {
         this.metrics.checkedPeers++;
       }
-
       let conflictState: ConflictState = { state: State.CONFLICT };
+
+      let backtracking = false;
 
       for (const versionToExplore of compatibleVersions) {
         // collect metric
@@ -190,10 +193,9 @@ export class Evaluator {
           this.metrics.checkedVersions++;
           const packageDetails = await this.client.getPackageDetails(currentRequirement.name, versionToExplore);
           if (packageDetails.peerDependencies) {
-            this.heuristics[currentRequirement.name].peers = Object.keys(packageDetails.peerDependencies); //.filter((peer) =>
-            // this.directDependencies.includes(peer),
-            // );
+            this.heuristics[currentRequirement.name].peers = Object.keys(packageDetails.peerDependencies);
           }
+
           const { newOpenRequirements, newEdges } = await this.addDependenciesToOpenSet(
             packageDetails,
             closedRequirements,
@@ -211,14 +213,15 @@ export class Evaluator {
           // direct backtracking to package from a set
           if (
             !this.force &&
-            !currentRequirement.peer &&
+            (this.packageSets.length || !currentRequirement.peer) &&
             !this.packageSets.find((ps) => ps.find((entry) => entry[0] === currentRequirement.name))
           ) {
+            backtracking = true;
             break;
           }
         }
       }
-      if (conflictState.state === State.CONFLICT) {
+      if (conflictState.state === State.CONFLICT && !backtracking) {
         this.heuristics[currentRequirement.name].conflictPotential++;
         // create set
         if (!this.force && currentRequirement.peer) {
@@ -234,7 +237,11 @@ export class Evaluator {
           packageSet.push([currentRequirement.name, currentRequirement.peer]);
           edges.forEach((e) => {
             if (e[1] === currentRequirement.name && !packageSet.find((entry) => entry[0] === e[0])) {
-              packageSet.push([e[0], false]);
+              const parentEdges = edges.filter((e2) => e2[1] === e[0]);
+              packageSet.push([e[0], parentEdges.some((e2) => e2[2])]);
+              for (const parentEdge of parentEdges) {
+                packageSet.push([parentEdge[0], false]);
+              }
             }
           });
         }

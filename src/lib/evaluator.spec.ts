@@ -12,7 +12,7 @@ describe('Test Evaluation', () => {
     };
 
     const client = new RegistryClient(__dirname + '/../../data');
-    const evaluator = new Evaluator(2, 10, false, false, false, client);
+    const evaluator = new Evaluator(2, 10, true, false, false, client);
 
     const openRequirements = await evaluator.prepare(args);
     const result = await evaluator.evaluate(openRequirements);

@@ -51,7 +51,6 @@ class Evaluator {
                     }))
                     : []),
             ];
-            this.directDependencies = openRequirements.map((pr) => pr.name);
             // load cache from disk
             this.client.readDataFromFiles();
             // get pinned version from command or package.json
@@ -118,11 +117,12 @@ class Evaluator {
                 const versionReference = this.getVersionReference(availableVersions, semver_1.major);
                 // if version requirement is no valid requirement, remove it entirely
                 // @TODO: handle versions that are urls or prefixed: with npm:, file:, etc.
-                if (!(0, semver_1.validRange)(currentRequirement.versionRequirement)) {
+                const versionRequirement = (0, semver_1.validRange)(currentRequirement.versionRequirement);
+                if (!versionRequirement) {
                     delete currentRequirement.versionRequirement;
                 }
-                let compatibleVersions = currentRequirement.versionRequirement && currentRequirement.versionRequirement !== '*'
-                    ? availableVersions.filter((v) => v && (0, compare_versions_1.satisfies)(v, currentRequirement.versionRequirement.replace('ˆ', '^')))
+                let compatibleVersions = versionRequirement && versionRequirement !== '*'
+                    ? availableVersions.filter((v) => v && (0, compare_versions_1.satisfies)(v, versionRequirement.replace('ˆ', '^')))
                     : availableVersions.filter((v) => v &&
                         (0, semver_1.major)(v) <= (0, semver_1.major)(versionReference) && // version should be below the reference
                         (0, compare_versions_1.compareVersions)(v, Math.max((0, semver_1.major)(versionReference) - this.allowedMajorVersions, 0).toString()) !== -1 &&
@@ -138,6 +138,7 @@ class Evaluator {
                     this.metrics.checkedPeers++;
                 }
                 let conflictState = { state: util_1.State.CONFLICT };
+                let backtracking = false;
                 for (const versionToExplore of compatibleVersions) {
                     // collect metric
                     if (conflictState.state === util_1.State.CONFLICT) {
@@ -147,9 +148,7 @@ class Evaluator {
                         this.metrics.checkedVersions++;
                         const packageDetails = yield this.client.getPackageDetails(currentRequirement.name, versionToExplore);
                         if (packageDetails.peerDependencies) {
-                            this.heuristics[currentRequirement.name].peers = Object.keys(packageDetails.peerDependencies); //.filter((peer) =>
-                            // this.directDependencies.includes(peer),
-                            // );
+                            this.heuristics[currentRequirement.name].peers = Object.keys(packageDetails.peerDependencies);
                         }
                         const { newOpenRequirements, newEdges } = yield this.addDependenciesToOpenSet(packageDetails, closedRequirements, openRequirements);
                         conflictState = yield this.evaluationStep(currentRequirement.peer &&
@@ -158,13 +157,14 @@ class Evaluator {
                             : selectedPackageVersions, [...closedRequirements, currentRequirement], newOpenRequirements, [...edges, ...newEdges]);
                         // direct backtracking to package from a set
                         if (!this.force &&
-                            !currentRequirement.peer &&
+                            (this.packageSets.length || !currentRequirement.peer) &&
                             !this.packageSets.find((ps) => ps.find((entry) => entry[0] === currentRequirement.name))) {
+                            backtracking = true;
                             break;
                         }
                     }
                 }
-                if (conflictState.state === util_1.State.CONFLICT) {
+                if (conflictState.state === util_1.State.CONFLICT && !backtracking) {
                     this.heuristics[currentRequirement.name].conflictPotential++;
                     // create set
                     if (!this.force && currentRequirement.peer) {
@@ -181,7 +181,11 @@ class Evaluator {
                         packageSet.push([currentRequirement.name, currentRequirement.peer]);
                         edges.forEach((e) => {
                             if (e[1] === currentRequirement.name && !packageSet.find((entry) => entry[0] === e[0])) {
-                                packageSet.push([e[0], false]);
+                                const parentEdges = edges.filter((e2) => e2[1] === e[0]);
+                                packageSet.push([e[0], parentEdges.some((e2) => e2[2])]);
+                                for (const parentEdge of parentEdges) {
+                                    packageSet.push([parentEdge[0], false]);
+                                }
                             }
                         });
                     }

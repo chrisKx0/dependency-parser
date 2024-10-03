@@ -107,19 +107,16 @@ class Installer {
     }
     updatePackageJson(resolvedPackages, path) {
         var _a, _b, _c;
+        // TODO: maybe update direct dependencies only
         const packageJson = JSON.parse((0, fs_1.readFileSync)(path, { encoding: 'utf8' }));
-        if (resolvedPackages.length && !packageJson.dependencies) {
-            packageJson.dependencies = {};
+        if (resolvedPackages.length && !packageJson.peerDependencies) {
+            packageJson.peerDependencies = {};
         }
         for (const resolvedPackage of resolvedPackages) {
-            if ((_a = packageJson.peerDependencies) === null || _a === void 0 ? void 0 : _a[resolvedPackage.name]) {
-                packageJson.peerDependencies[resolvedPackage.name] = resolvedPackage.semVerInfo;
+            packageJson.peerDependencies[resolvedPackage.name] = resolvedPackage.semVerInfo;
+            if ((_a = packageJson.dependencies) === null || _a === void 0 ? void 0 : _a[resolvedPackage.name]) {
+                delete packageJson.dependencies[resolvedPackage.name];
             }
-            else {
-                packageJson.dependencies[resolvedPackage.name] = resolvedPackage.semVerInfo;
-            }
-            // sort dependencies alphabetically before writing to file
-            packageJson.dependencies = Object.fromEntries(Object.entries(packageJson.dependencies).sort((a, b) => a[0].localeCompare(b[0])));
             if ((_b = packageJson.devDependencies) === null || _b === void 0 ? void 0 : _b[resolvedPackage.name]) {
                 delete packageJson.devDependencies[resolvedPackage.name];
             }
@@ -127,6 +124,8 @@ class Installer {
                 delete packageJson.optionalDependencies[resolvedPackage.name];
             }
         }
+        // sort dependencies alphabetically before writing to file
+        packageJson.peerDependencies = Object.fromEntries(Object.entries(packageJson.peerDependencies).sort((a, b) => a[0].localeCompare(b[0])));
         (0, fs_1.writeFileSync)(path, JSON.stringify(packageJson, null, 2) + '\n', { encoding: 'utf8' });
     }
     isToolInstalled(tool) {

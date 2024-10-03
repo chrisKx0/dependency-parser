@@ -8,7 +8,6 @@ export declare class Evaluator {
     private readonly force;
     private readonly client;
     private readonly heuristics;
-    private directDependencies;
     private metrics;
     private packageSets;
     constructor(allowedMajorVersions?: number, allowedMinorAndPatchVersions?: number, allowPreReleases?: boolean, pinVersions?: boolean, force?: boolean, client?: RegistryClient);

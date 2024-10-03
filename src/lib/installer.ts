@@ -107,20 +107,18 @@ export class Installer {
   }
 
   public updatePackageJson(resolvedPackages: ResolvedPackage[], path: string) {
+    // TODO: maybe update direct dependencies only
     const packageJson: PackageJson = JSON.parse(readFileSync(path, { encoding: 'utf8' }));
-    if (resolvedPackages.length && !packageJson.dependencies) {
-      packageJson.dependencies = {};
+    if (resolvedPackages.length && !packageJson.peerDependencies) {
+      packageJson.peerDependencies = {};
     }
 
     for (const resolvedPackage of resolvedPackages) {
-      if (packageJson.peerDependencies?.[resolvedPackage.name]) {
-        packageJson.peerDependencies[resolvedPackage.name] = resolvedPackage.semVerInfo;
-      } else {
-        packageJson.dependencies[resolvedPackage.name] = resolvedPackage.semVerInfo;
-      }
+      packageJson.peerDependencies[resolvedPackage.name] = resolvedPackage.semVerInfo;
 
-      // sort dependencies alphabetically before writing to file
-      packageJson.dependencies = Object.fromEntries(Object.entries(packageJson.dependencies).sort((a, b) => a[0].localeCompare(b[0])));
+      if (packageJson.dependencies?.[resolvedPackage.name]) {
+        delete packageJson.dependencies[resolvedPackage.name];
+      }
 
       if (packageJson.devDependencies?.[resolvedPackage.name]) {
         delete packageJson.devDependencies[resolvedPackage.name];
@@ -130,6 +128,12 @@ export class Installer {
         delete packageJson.optionalDependencies[resolvedPackage.name];
       }
     }
+
+    // sort dependencies alphabetically before writing to file
+    packageJson.peerDependencies = Object.fromEntries(
+      Object.entries(packageJson.peerDependencies).sort((a, b) => a[0].localeCompare(b[0])),
+    );
+
     writeFileSync(path, JSON.stringify(packageJson, null, 2) + '\n', { encoding: 'utf8' });
   }
 
