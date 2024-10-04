@@ -2,7 +2,7 @@
   "allow_pre_releases": {
     "message": "Allow dependencies to be resolved to pre-release versions?",
     "type": "confirm",
-    "default": false
+    "default": true
   },
   "choose_package_manager": {
     "message": "Which package manager should be used for installation?",

@@ -33,7 +33,7 @@ async function run(args: ArgumentsCamelCase) {
   const allowPreReleases =
     args[ArgumentType.PRE_RELEASE] != null
       ? !!args[ArgumentType.PRE_RELEASE]
-      : showPrompts && (await promptQuestion<boolean>('allow_pre_releases'));
+      : !showPrompts || (await promptQuestion<boolean>('allow_pre_releases'));
   const pinVersions =
     args[ArgumentType.KEEP_VERSIONS] != null
       ? !!args[ArgumentType.KEEP_VERSIONS]

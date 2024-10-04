@@ -44,7 +44,7 @@ export class Evaluator {
   constructor(
     private readonly allowedMajorVersions = 2,
     private readonly allowedMinorAndPatchVersions = 10,
-    private readonly allowPreReleases = false,
+    private readonly allowPreReleases = true,
     private readonly pinVersions = false,
     private readonly force = false,
     private readonly client = new RegistryClient(),
@@ -165,7 +165,7 @@ export class Evaluator {
                 v &&
                 major(v) <= major(versionReference) && // version should be below the reference
                 compareVersions(v, Math.max(major(versionReference) - this.allowedMajorVersions, 0).toString()) !== -1 &&
-                (this.allowPreReleases || !v.includes('-')),
+                (this.heuristics[currentRequirement.name]?.isDirectDependency || this.allowPreReleases || !v.includes('-')),
             );
 
       compatibleVersions = this.getVersionsInMinorAndPatchRange(compatibleVersions);
@@ -187,7 +187,7 @@ export class Evaluator {
       for (const versionToExplore of compatibleVersions) {
         // collect metric
         if (conflictState.state === State.CONFLICT) {
-          if (!this.allowPreReleases && versionToExplore.includes('-')) {
+          if (!this.heuristics[currentRequirement.name]?.isDirectDependency && !this.allowPreReleases && versionToExplore.includes('-')) {
             continue;
           }
           this.metrics.checkedVersions++;
@@ -200,6 +200,7 @@ export class Evaluator {
             packageDetails,
             closedRequirements,
             openRequirements,
+            edges,
           );
           conflictState = await this.evaluationStep(
             currentRequirement.peer &&
@@ -208,7 +209,7 @@ export class Evaluator {
               : selectedPackageVersions,
             [...closedRequirements, currentRequirement],
             newOpenRequirements,
-            [...edges, ...newEdges],
+            newEdges,
           );
           // direct backtracking to package from a set
           if (
@@ -234,13 +235,21 @@ export class Evaluator {
           } else {
             packageSet = oldPackageSet;
           }
-          packageSet.push([currentRequirement.name, currentRequirement.peer]);
+          // TODO: check if this is correct
+          if (packageSet.find((e) => e[0] === currentRequirement.name && e[1] === currentRequirement.peer)) {
+            packageSet.push([currentRequirement.name, currentRequirement.peer]);
+          }
           edges.forEach((e) => {
             if (e[1] === currentRequirement.name && !packageSet.find((entry) => entry[0] === e[0])) {
               const parentEdges = edges.filter((e2) => e2[1] === e[0]);
-              packageSet.push([e[0], parentEdges.some((e2) => e2[2])]);
+              const hasPeerParent = parentEdges.some((e2) => e2[2]);
+              if (packageSet.find((e2) => e2[0] === e[0] && e2[1] === hasPeerParent)) {
+                packageSet.push([e[0], hasPeerParent]);
+              }
               for (const parentEdge of parentEdges) {
-                packageSet.push([parentEdge[0], false]);
+                if (packageSet.find((e2) => e2[0] === parentEdge[0] && !e2[1])) {
+                  packageSet.push([parentEdge[0], false]);
+                }
               }
             }
           });
@@ -260,9 +269,10 @@ export class Evaluator {
     packageDetails: PackageDetails,
     closedRequirements: PackageRequirement[],
     openRequirements: PackageRequirement[],
+    edges: EdgeWithPeer[],
   ): Promise<{ newOpenRequirements: PackageRequirement[]; newEdges: EdgeWithPeer[] }> {
     let newOpenRequirements = [...openRequirements];
-    const newEdges: EdgeWithPeer[] = [];
+    const newEdges: EdgeWithPeer[] = [...edges];
     const newRequirements: PackageRequirement[] = [
       ...(packageDetails.peerDependencies
         ? Object.entries(packageDetails.peerDependencies).map(([name, versionRequirement]) => ({
@@ -287,7 +297,12 @@ export class Evaluator {
         !closedRequirements.some((pr) => pr.name === newRequirement.name && pr.versionRequirement === newRequirement.versionRequirement)
       ) {
         newOpenRequirements.push(newRequirement);
-        newEdges.push([packageDetails.name, newRequirement.name, newRequirement.peer]);
+        const existingEdge = newEdges.find((e) => e[0] === packageDetails.name && e[1] === newRequirement.name);
+        if (existingEdge) {
+          existingEdge[2] = newRequirement.peer; // TODO: check if this is correct
+        } else {
+          newEdges.push([packageDetails.name, newRequirement.name, newRequirement.peer]);
+        }
         await this.createHeuristics(newRequirement.name);
       }
     }
@@ -311,7 +326,7 @@ export class Evaluator {
           v &&
           major(v) <= major(versionReference) && // version should be below the reference
           compareVersions(v, Math.max(major(versionReference) - this.allowedMajorVersions, 0).toString()) !== -1 &&
-          (this.allowPreReleases || !v.includes('-')) &&
+          (isDirectDependency || this.allowPreReleases || !v.includes('-')) &&
           (!pinnedVersion || satisfies(v, pinnedVersion)),
       );
       versionsForPeers = this.getVersionsInMinorAndPatchRange(versionsForPeers);
@@ -485,10 +500,7 @@ export class Evaluator {
           const paramSplit = param.split(/(?<!^)@/);
           const name = paramSplit.shift();
           if (!paramSplit.length) {
-            const versions = (await this.client.getAllVersionsFromRegistry(name)).versions
-              .filter((v) => this.allowPreReleases || !v.includes('-'))
-              .sort(compareVersions)
-              .reverse();
+            const versions = (await this.client.getAllVersionsFromRegistry(name)).versions.sort(compareVersions).reverse();
             pinnedVersions[name] = versions[0];
           } else {
             pinnedVersions[name] = paramSplit.shift();
