@@ -7,7 +7,8 @@
     "build": "nx build && npm i -g ./dist/interactive",
     "package-interactive": "ncc build src/main-interactive.ts -o dist/interactive --source-map",
     "package-unattended": "ncc build src/main-unattended.ts -o dist/unattended --source-map",
-    "release": "nx run build && nx run package-unattended && git add -f dist/"
+    "release": "nx run build && nx run package-unattended && git add -f dist/",
+    "test": "nx test"
   },
   "dependencies": {
     "@actions/core": "^1.10.1",
