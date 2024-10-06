@@ -11,7 +11,7 @@ export declare class Evaluator {
     private metrics;
     private packageSets;
     constructor(allowedMajorVersions?: number, allowedMinorAndPatchVersions?: number, allowPreReleases?: boolean, pinVersions?: boolean, force?: boolean, client?: RegistryClient);
-    prepare(args: ArgumentsCamelCase | ArgsUnattended): Promise<PackageRequirement[]>;
+    prepare(args: ArgumentsCamelCase | ArgsUnattended, excludedPackages: string[]): Promise<PackageRequirement[]>;
     evaluate(openRequirements: PackageRequirement[]): Promise<{
         conflictState: ConflictState;
         metrics: Metrics;

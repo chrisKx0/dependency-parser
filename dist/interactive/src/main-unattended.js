@@ -14,12 +14,14 @@ function run() {
         // initialize evaluator
         const allowedMajorVersions = parseInt(core.getInput('allowed-major-versions', { trimWhitespace: true })) || 2;
         const allowedMinorAndPatchVersions = parseInt(core.getInput('allowed-minor-versions', { trimWhitespace: true })) || 10;
-        const allowPreReleases = core.getInput('allow-pre-releases', { trimWhitespace: true }) === 'true';
+        const allowPreReleases = core.getInput('allow-pre-releases', { trimWhitespace: true }) !== 'false';
+        const excludedPackages = (core.getInput('exclude').split(' ') || []).map(lib_1.exclude).filter((ep) => ep);
+        const force = core.getInput('force', { trimWhitespace: true }) !== 'false';
         const pinVersions = core.getInput('keep-versions', { trimWhitespace: true }) === 'true';
-        const evaluator = new lib_1.Evaluator(allowedMajorVersions, allowedMinorAndPatchVersions, allowPreReleases, pinVersions);
+        const evaluator = new lib_1.Evaluator(allowedMajorVersions, allowedMinorAndPatchVersions, allowPreReleases, pinVersions, force);
         core.info('-- Preparing dependency resolution --');
         // run preparation
-        const openRequirements = yield evaluator.prepare({ path: packageJsonPath });
+        const openRequirements = yield evaluator.prepare({ path: packageJsonPath }, excludedPackages);
         (0, lib_1.createOpenRequirementOutput)(openRequirements, false);
         core.info('-- Performing dependency resolution --');
         // run evaluation

@@ -6,6 +6,7 @@ export const PACKAGE_BUNDLES = ['@nx', '@angular'];
 export enum ArgumentType {
   ALL_DEPENDENCIES = 'all-dependencies',
   COLLECT_METRICS = 'collect-metrics',
+  EXCLUDE = 'exclude',
   FORCE = 'force',
   INSTALL = 'install',
   MAJOR_VERSIONS = 'major-versions',

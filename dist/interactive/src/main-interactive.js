@@ -13,12 +13,14 @@ function run(args) {
         // initial user inputs
         const collectMetrics = !!args[lib_1.ArgumentType.COLLECT_METRICS];
         const force = !!args[lib_1.ArgumentType.FORCE];
+        // initialize excluded packages
+        const excludedPackages = (args[lib_1.ArgumentType.EXCLUDE] || []).map(lib_1.exclude).filter((ep) => ep);
         const showPrompts = !args[lib_1.ArgumentType.SKIP_PROMPTS];
         const allowedMajorVersions = (_a = args[lib_1.ArgumentType.MAJOR_VERSIONS]) !== null && _a !== void 0 ? _a : (!showPrompts ? 2 : yield (0, lib_1.promptQuestion)('major_version_count'));
         const allowedMinorAndPatchVersions = (_b = args[lib_1.ArgumentType.MINOR_VERSIONS]) !== null && _b !== void 0 ? _b : (!showPrompts ? 10 : yield (0, lib_1.promptQuestion)('minor_version_count'));
         const allowPreReleases = args[lib_1.ArgumentType.PRE_RELEASE] != null
             ? !!args[lib_1.ArgumentType.PRE_RELEASE]
-            : showPrompts && (yield (0, lib_1.promptQuestion)('allow_pre_releases'));
+            : !showPrompts || (yield (0, lib_1.promptQuestion)('allow_pre_releases'));
         const pinVersions = args[lib_1.ArgumentType.KEEP_VERSIONS] != null
             ? !!args[lib_1.ArgumentType.KEEP_VERSIONS]
             : showPrompts && (yield (0, lib_1.promptQuestion)('keep_versions'));
@@ -30,7 +32,7 @@ function run(args) {
         let spinner = new clui_1.Spinner('Preparing dependency resolution...');
         spinner.start();
         startTime = performance.now();
-        let openRequirements = yield evaluator.prepare(args);
+        let openRequirements = yield evaluator.prepare(args, excludedPackages);
         endTime = performance.now();
         const durationPreparation = (endTime - startTime) / 1000;
         spinner.stop();
@@ -136,6 +138,11 @@ function run(args) {
     type: 'boolean',
     boolean: true,
     description: 'Collect performance metrics and save to file',
+})
+    .option(lib_1.ArgumentType.EXCLUDE, {
+    type: 'array',
+    array: true,
+    description: 'Packages to exclude from evaluation',
 })
     .option(lib_1.ArgumentType.FORCE, {
     alias: 'f',

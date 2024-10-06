@@ -7,6 +7,7 @@ import {
   createOpenRequirementOutput,
   createResolvedPackageOutput,
   Evaluator,
+  exclude,
   Installer,
   PACKAGE_BUNDLES,
   State,
@@ -20,14 +21,16 @@ export async function run() {
   // initialize evaluator
   const allowedMajorVersions = parseInt(core.getInput('allowed-major-versions', { trimWhitespace: true })) || 2;
   const allowedMinorAndPatchVersions = parseInt(core.getInput('allowed-minor-versions', { trimWhitespace: true })) || 10;
-  const allowPreReleases = core.getInput('allow-pre-releases', {trimWhitespace: true}) !== 'false';
+  const allowPreReleases = core.getInput('allow-pre-releases', { trimWhitespace: true }) !== 'false';
+  const excludedPackages = (core.getInput('exclude').split(' ') || []).map(exclude).filter((ep) => ep);
+  const force = core.getInput('force', { trimWhitespace: true }) !== 'false';
   const pinVersions = core.getInput('keep-versions', { trimWhitespace: true }) === 'true';
-  const evaluator = new Evaluator(allowedMajorVersions, allowedMinorAndPatchVersions, allowPreReleases, pinVersions);
+  const evaluator = new Evaluator(allowedMajorVersions, allowedMinorAndPatchVersions, allowPreReleases, pinVersions, force);
 
   core.info('-- Preparing dependency resolution --');
 
   // run preparation
-  const openRequirements = await evaluator.prepare({ path: packageJsonPath });
+  const openRequirements = await evaluator.prepare({ path: packageJsonPath }, excludedPackages);
   createOpenRequirementOutput(openRequirements, false);
 
   core.info('-- Performing dependency resolution --');

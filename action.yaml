@@ -16,6 +16,14 @@ inputs:
     required: false
   allow-pre-releases:
     description: Allow dependencies with pre-release versions (e.g. beta versions)
+    default: 'true'
+    required: false
+  exclude:
+    description: Packages to exclude from evaluation, separated by spaces
+    default: ''
+    required: false
+  force:
+    description: Forcibly try every version combination
     default: 'false'
     required: false
   keep-versions:

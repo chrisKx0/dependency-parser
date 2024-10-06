@@ -7,6 +7,7 @@ var ArgumentType;
 (function (ArgumentType) {
     ArgumentType["ALL_DEPENDENCIES"] = "all-dependencies";
     ArgumentType["COLLECT_METRICS"] = "collect-metrics";
+    ArgumentType["EXCLUDE"] = "exclude";
     ArgumentType["FORCE"] = "force";
     ArgumentType["INSTALL"] = "install";
     ArgumentType["MAJOR_VERSIONS"] = "major-versions";

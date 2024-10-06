@@ -50,7 +50,7 @@ export class Evaluator {
     private readonly client = new RegistryClient(),
   ) {}
 
-  public async prepare(args: ArgumentsCamelCase | ArgsUnattended): Promise<PackageRequirement[]> {
+  public async prepare(args: ArgumentsCamelCase | ArgsUnattended, excludedPackages: string[]): Promise<PackageRequirement[]> {
     // get package.json path from args or current working directory & add filename if necessary
     const path = ((args[ArgumentType.PATH] as string) ?? process.cwd()) + '/package.json';
 
@@ -73,6 +73,9 @@ export class Evaluator {
 
     // load cache from disk
     this.client.readDataFromFiles();
+
+    // exclude packages from flag
+    openRequirements = openRequirements.filter((pr) => !excludedPackages.some((ep) => new RegExp(ep).test(pr.name)));
 
     // get pinned version from command or package.json
     const pinnedVersions: Record<string, string> = isArgumentsCamelCase(args)
@@ -236,18 +239,18 @@ export class Evaluator {
             packageSet = oldPackageSet;
           }
           // TODO: check if this is correct
-          if (packageSet.find((e) => e[0] === currentRequirement.name && e[1] === currentRequirement.peer)) {
+          if (!packageSet.find((e) => e[0] === currentRequirement.name && e[1] === currentRequirement.peer)) {
             packageSet.push([currentRequirement.name, currentRequirement.peer]);
           }
           edges.forEach((e) => {
             if (e[1] === currentRequirement.name && !packageSet.find((entry) => entry[0] === e[0])) {
               const parentEdges = edges.filter((e2) => e2[1] === e[0]);
               const hasPeerParent = parentEdges.some((e2) => e2[2]);
-              if (packageSet.find((e2) => e2[0] === e[0] && e2[1] === hasPeerParent)) {
+              if (!packageSet.find((e2) => e2[0] === e[0] && e2[1] === hasPeerParent)) {
                 packageSet.push([e[0], hasPeerParent]);
               }
               for (const parentEdge of parentEdges) {
-                if (packageSet.find((e2) => e2[0] === parentEdge[0] && !e2[1])) {
+                if (!packageSet.find((e2) => e2[0] === parentEdge[0] && !e2[1])) {
                   packageSet.push([parentEdge[0], false]);
                 }
               }

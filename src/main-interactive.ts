@@ -19,12 +19,15 @@ import {
   Severity,
   areResolvedPackages,
   Metrics,
+  exclude,
 } from './lib';
 
 async function run(args: ArgumentsCamelCase) {
   // initial user inputs
   const collectMetrics = !!args[ArgumentType.COLLECT_METRICS];
   const force = !!args[ArgumentType.FORCE];
+  // initialize excluded packages
+  const excludedPackages = ((args[ArgumentType.EXCLUDE] as string[]) || []).map(exclude).filter((ep) => ep);
   const showPrompts = !args[ArgumentType.SKIP_PROMPTS];
   const allowedMajorVersions =
     (args[ArgumentType.MAJOR_VERSIONS] as number) ?? (!showPrompts ? 2 : await promptQuestion<number>('major_version_count'));
@@ -50,7 +53,7 @@ async function run(args: ArgumentsCamelCase) {
   spinner.start();
   startTime = performance.now();
 
-  let openRequirements = await evaluator.prepare(args);
+  let openRequirements = await evaluator.prepare(args, excludedPackages);
 
   endTime = performance.now();
   const durationPreparation = (endTime - startTime) / 1000;
@@ -177,6 +180,11 @@ yargs(hideBin(process.argv))
     type: 'boolean',
     boolean: true,
     description: 'Collect performance metrics and save to file',
+  })
+  .option(ArgumentType.EXCLUDE, {
+    type: 'array',
+    array: true,
+    description: 'Packages to exclude from evaluation',
   })
   .option(ArgumentType.FORCE, {
     alias: 'f',
