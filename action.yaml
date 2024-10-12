@@ -26,6 +26,10 @@ inputs:
     description: Forcibly try every version combination
     default: 'false'
     required: false
+  include:
+    description: Packages to take into account in evaluation, separated by spaces
+    default: ''
+    required: false
   keep-versions:
     description: Keep the versions specified in package.json
     default: 'false'

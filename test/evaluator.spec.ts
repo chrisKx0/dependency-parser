@@ -161,7 +161,7 @@ describe('Test Evaluation', () => {
       path: __dirname + '/fixtures/success',
     };
 
-    const openRequirements = await evaluator.prepare(args, []);
+    const openRequirements = await evaluator.prepare(args, [], []);
     const result = await evaluator.evaluate(openRequirements);
 
     expect(result).toMatchObject({
@@ -190,7 +190,7 @@ describe('Test Evaluation', () => {
       path: __dirname + '/fixtures/conflict',
     };
 
-    const openRequirements = await evaluator.prepare(args, []);
+    const openRequirements = await evaluator.prepare(args, [], []);
     const result = await evaluator.evaluate(openRequirements);
 
     expect(result).toMatchObject({

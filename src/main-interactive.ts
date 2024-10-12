@@ -7,7 +7,6 @@ import { hideBin } from 'yargs/helpers';
 
 import {
   ArgumentType,
-  ConflictState,
   PACKAGE_BUNDLES,
   State,
   Evaluator,
@@ -18,16 +17,15 @@ import {
   promptQuestion,
   Severity,
   areResolvedPackages,
-  Metrics,
-  exclude,
+  getPackageRegex,
+  EvaluationResult,
+  ConflictState,
 } from './lib';
 
 async function run(args: ArgumentsCamelCase) {
-  // initial user inputs
+  // get command line arguments and initial user inputs
   const collectMetrics = !!args[ArgumentType.COLLECT_METRICS];
   const force = !!args[ArgumentType.FORCE];
-  // initialize excluded packages
-  const excludedPackages = ((args[ArgumentType.EXCLUDE] as string[]) || []).map(exclude).filter((ep) => ep);
   const showPrompts = !args[ArgumentType.SKIP_PROMPTS];
   const allowedMajorVersions =
     (args[ArgumentType.MAJOR_VERSIONS] as number) ?? (!showPrompts ? 2 : await promptQuestion<number>('major_version_count'));
@@ -42,6 +40,10 @@ async function run(args: ArgumentsCamelCase) {
       ? !!args[ArgumentType.KEEP_VERSIONS]
       : showPrompts && (await promptQuestion<boolean>('keep_versions'));
 
+  // initialize excluded and included packages
+  const excludedPackages = ((args[ArgumentType.EXCLUDE] as string[]) || []).map(getPackageRegex).filter((ep) => ep);
+  const includedPackages = ((args[ArgumentType.INCLUDE] as string[]) || []).map(getPackageRegex).filter((ep) => ep);
+
   // initialize evaluator
   const evaluator = new Evaluator(allowedMajorVersions, allowedMinorAndPatchVersions, allowPreReleases, pinVersions, force);
 
@@ -53,19 +55,21 @@ async function run(args: ArgumentsCamelCase) {
   spinner.start();
   startTime = performance.now();
 
-  let openRequirements = await evaluator.prepare(args, excludedPackages);
+  // perform preparation to get initial open requirements
+  let openRequirements = await evaluator.prepare(args, excludedPackages, includedPackages);
 
   endTime = performance.now();
+  // calculate duration of preparation with start and end times
   const durationPreparation = (endTime - startTime) / 1000;
   spinner.stop();
 
-  // let user choose the packages he likes to include in package resolution
+  // user choice of the packages to be included in package resolution
   if (showPrompts && !args[ArgumentType.ALL_DEPENDENCIES]) {
     const names = openRequirements.map((pr) => pr.name);
     const requirementsToConsider = await promptQuestion<string[]>('choose_dependencies_to_resolve', names, names);
     openRequirements = openRequirements.filter((pr) => requirementsToConsider.includes(pr.name));
   } else {
-    // show open requirements as user output
+    // create command line output of open requirements
     createOpenRequirementOutput(openRequirements);
   }
 
@@ -74,35 +78,39 @@ async function run(args: ArgumentsCamelCase) {
   spinner.start();
   startTime = performance.now();
 
-  let result: { conflictState: ConflictState; metrics: Metrics };
-  let conflictState: ConflictState;
+  let result: EvaluationResult;
+  let conflictState: ConflictState = { state: State.CONFLICT };
   try {
+    // perform evaluation to get resolved packages
     result = await evaluator.evaluate(openRequirements);
     conflictState = result.conflictState;
     spinner.stop();
   } catch (e) {
-    conflictState = { state: State.CONFLICT };
     spinner.stop();
     createMessage(e.message, Severity.ERROR);
   }
 
   endTime = performance.now();
+  // calculate duration of evaluation with start and end times
   const durationEvaluation = (endTime - startTime) / 1000;
 
+  // perform post install steps if no conflict has arisen
   if (conflictState.state === 'OK' && areResolvedPackages(conflictState.result)) {
     createResolvedPackageOutput(conflictState.result);
 
     const installer = new Installer();
 
     if (collectMetrics) {
+      // create metrics file when flag was set
       installer.createMetricsFile({ ...result.metrics, durationPreparation, durationEvaluation });
     }
 
+    // get paths of package.json and nx.json
     const path = (args[ArgumentType.PATH] as string) ?? process.cwd();
     const packageJsonPath = path + '/package.json';
     const nxPath = path + '/nx.json';
 
-    // ask for package.json update as user input
+    // user choice if package.json should be updated
     if (
       !(args[ArgumentType.MODIFY_JSON] != null
         ? !!args[ArgumentType.MODIFY_JSON]
@@ -113,7 +121,7 @@ async function run(args: ArgumentsCamelCase) {
 
     installer.updatePackageJson(conflictState.result, packageJsonPath);
 
-    // ask for dependency installation as user input
+    // user choice if dependencies should be installed
     if (
       !(args[ArgumentType.INSTALL] != null
         ? !!args[ArgumentType.INSTALL]
@@ -122,6 +130,7 @@ async function run(args: ArgumentsCamelCase) {
       return;
     }
 
+    // get package manager choice either by command line option or other means
     let packageManager: PackageManager;
     if (
       args[ArgumentType.PACKAGE_MANAGER] === 'yarn' ||
@@ -130,6 +139,7 @@ async function run(args: ArgumentsCamelCase) {
     ) {
       packageManager = args[ArgumentType.PACKAGE_MANAGER];
     } else {
+      // get all possible package managers and let the user choose one (or show warning)
       const packageManagers = installer.getPackageManagers(packageJsonPath, nxPath);
       if (!packageManagers.length) {
         createMessage('missing_package_manager', Severity.WARNING);
@@ -140,6 +150,7 @@ async function run(args: ArgumentsCamelCase) {
         : packageManagers[0];
     }
 
+    // get nx and Angular versions (if their packages will be installed) and ask user if migrations should be made
     const nxVersion = conflictState.result.find((rp) => rp.name.startsWith(PACKAGE_BUNDLES[0]))?.semVerInfo;
     const ngPackages = conflictState.result.filter((rp) => rp.name.startsWith(PACKAGE_BUNDLES[1]));
     const runMigrations =
@@ -149,10 +160,12 @@ async function run(args: ArgumentsCamelCase) {
     spinner = new Spinner(`Performing installation with ${packageManager}...`);
     spinner.start();
 
+    // perform installation with all retrieved parameters
     await installer.install(packageManager, path, nxVersion, ngPackages, runMigrations);
 
     spinner.stop();
   } else {
+    // if conflict did arise, show error message and ask the user if it should be retried (with different parameters)
     createMessage('resolution_failure', Severity.ERROR);
     const retry =
       args[ArgumentType.RETRY] != null ? !!args[ArgumentType.RETRY] : showPrompts && (await promptQuestion<boolean>('try_again'));
@@ -162,6 +175,7 @@ async function run(args: ArgumentsCamelCase) {
   }
 }
 
+// initialize CLI with commands and options via yargs
 yargs(hideBin(process.argv))
   .command(['update', 'u'], 'Updates all peer dependencies by heuristics', {}, (args) => {
     run(args);
@@ -191,6 +205,11 @@ yargs(hideBin(process.argv))
     type: 'boolean',
     boolean: true,
     description: 'Forcibly try every version combination',
+  })
+  .option(ArgumentType.INCLUDE, {
+    type: 'array',
+    array: true,
+    description: 'Packages to take into account in evaluation',
   })
   .option(ArgumentType.INSTALL, {
     alias: 'i',
