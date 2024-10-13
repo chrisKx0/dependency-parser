@@ -118,6 +118,8 @@ export class Evaluator {
       } else {
         openRequirements.push({ name, peer: false, versionRequirement: pinnedVersion });
       }
+
+      // @TODO: make package bundles more robust
       // edit bundled packages to also be of the same version
       openRequirements
         .filter((pr) => PACKAGE_BUNDLES.some((pb) => pr.name.startsWith(pb) && name.startsWith(pb)))
@@ -163,6 +165,8 @@ export class Evaluator {
 
       // check for fixed versions
       let version = currentRequirement.peer && selectedPackageVersions.find((rp) => rp.name === currentRequirement.name)?.semVerInfo;
+
+      // @TODO: make package bundles more robust
       if (!version) {
         // bundled packages need to be of the same version
         version = selectedPackageVersions.find((rp) =>
@@ -207,7 +211,7 @@ export class Evaluator {
                 v &&
                 major(v) <= major(versionReference) &&
                 compareVersions(v, Math.max(major(versionReference) - this.allowedMajorVersions, 0).toString()) !== -1 &&
-                (this.heuristics[currentRequirement.name]?.isDirectDependency || this.allowPreReleases || !v.includes('-')),
+                (!v.includes('-') || (!this.heuristics[currentRequirement.name]?.isDirectDependency && this.allowPreReleases)),
             );
       // also filter them by their allowed minor and patch range
       compatibleVersions = this.getVersionsInMinorAndPatchRange(compatibleVersions);
@@ -417,7 +421,7 @@ export class Evaluator {
           v &&
           major(v) <= major(versionReference) &&
           compareVersions(v, Math.max(major(versionReference) - this.allowedMajorVersions, 0).toString()) !== -1 &&
-          (isDirectDependency || this.allowPreReleases || !v.includes('-')) &&
+          (!v.includes('-') || (!isDirectDependency && this.allowPreReleases)) &&
           (!pinnedVersion || satisfies(v, pinnedVersion)),
       );
       // also filter them by their allowed minor and patch range

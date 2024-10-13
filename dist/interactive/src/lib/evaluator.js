@@ -9,6 +9,10 @@ const process = tslib_1.__importStar(require("process"));
 const semver_1 = require("semver");
 const toposort_1 = tslib_1.__importDefault(require("toposort"));
 const util_1 = require("./util");
+/**
+ * checks if args are of type ArgumentsCamelCase
+ * @param args args of type ArgumentsCamelCase or ArgsUnattended
+ */
 function isArgumentsCamelCase(args) {
     return !!args._;
 }
@@ -30,12 +34,19 @@ class Evaluator {
         };
         this.packageSets = [];
     }
-    prepare(args, excludedPackages) {
+    /**
+     * prepares the first set of open requirements by retrieving them from package.json or command line.
+     * heuristics will be created for these open requirements too
+     * @param args command line arguments
+     * @param excludedPackages packages to exclude from preparation
+     * @param includedPackages packages that are allowed as initial open requirements
+     */
+    prepare(args, excludedPackages, includedPackages) {
         var _a;
         return tslib_1.__awaiter(this, void 0, void 0, function* () {
-            // get package.json path from args or current working directory & add filename if necessary
+            // get package.json path from args or current working directory
             const path = ((_a = args[util_1.ArgumentType.PATH]) !== null && _a !== void 0 ? _a : process.cwd()) + '/package.json';
-            // read package.json to retrieve dependencies and peer dependencies
+            // read package.json to retrieve dependencies and peer dependencies and add them to open requirements
             const packageJson = JSON.parse(fs.readFileSync(path, { encoding: 'utf8' }));
             let openRequirements = [
                 ...(packageJson.peerDependencies
@@ -51,15 +62,18 @@ class Evaluator {
                     }))
                     : []),
             ];
-            // load cache from disk
-            this.client.readDataFromFiles();
-            // exclude packages from flag
+            // exclude packages that are specified in excludedPackages
             openRequirements = openRequirements.filter((pr) => !excludedPackages.some((ep) => new RegExp(ep).test(pr.name)));
-            // get pinned version from command or package.json
-            const pinnedVersions = isArgumentsCamelCase(args)
-                ? yield this.getPinnedVersions(args._, Object.assign(Object.assign({}, packageJson.dependencies), packageJson.peerDependencies))
-                : {};
-            // add heuristics for direct dependencies & pinned versions
+            // include only packages that are specified in includedPackages
+            if (includedPackages.length) {
+                openRequirements = openRequirements.filter((pr) => includedPackages.some((ep) => new RegExp(ep).test(pr.name)));
+            }
+            // load cache from file system
+            this.client.readDataFromFiles();
+            // get pinned versions for packages from command or package.json, if specified
+            const dependencies = openRequirements.reduce((acc, curr) => { var _a, _b, _c; return (Object.assign(Object.assign({}, acc), { [curr.name]: (_b = (_a = packageJson.peerDependencies) === null || _a === void 0 ? void 0 : _a[curr.name]) !== null && _b !== void 0 ? _b : (_c = packageJson.dependencies) === null || _c === void 0 ? void 0 : _c[curr.name] })); }, {});
+            const pinnedVersions = isArgumentsCamelCase(args) ? yield this.getPinnedVersions(args._, dependencies) : {};
+            // add heuristics for direct dependencies & pinned versions if needed
             for (const { name } of openRequirements) {
                 yield this.createHeuristics(name, pinnedVersions[name], true);
             }
@@ -73,37 +87,53 @@ class Evaluator {
                 else {
                     openRequirements.push({ name, peer: false, versionRequirement: pinnedVersion });
                 }
+                // @TODO: make package bundles more robust
                 // edit bundled packages to also be of the same version
                 openRequirements
                     .filter((pr) => util_1.PACKAGE_BUNDLES.some((pb) => pr.name.startsWith(pb) && name.startsWith(pb)))
                     .forEach((pr) => (pr.versionRequirement = pinnedVersion));
             }
-            // sort direct dependencies by heuristics
             openRequirements = this.sortByHeuristics(openRequirements);
             // save cache to disk
             this.client.writeDataToFiles();
             return openRequirements;
         });
     }
+    /**
+     * performs evaluation for open requirements
+     * @param openRequirements initial open requirements of the evaluation
+     */
     evaluate(openRequirements) {
         return tslib_1.__awaiter(this, void 0, void 0, function* () {
+            // call first evaluation step with only open requirements
             const conflictState = yield this.evaluationStep([], [], openRequirements, []);
             // save cache to disk
             this.client.writeDataToFiles();
             return { conflictState, metrics: this.metrics };
         });
     }
+    /**
+     * step of the evaluation in which a version for the next open requirement is selected
+     * @param selectedPackageVersions the already selected peer dependency versions
+     * @param closedRequirements all already closed requirements
+     * @param openRequirements open requirements that are still open
+     * @param edges edges between the requirements for backtracking purposes
+     * @private
+     */
     evaluationStep(selectedPackageVersions, closedRequirements, openRequirements, edges) {
         var _a, _b, _c, _d;
         return tslib_1.__awaiter(this, void 0, void 0, function* () {
             if (openRequirements.length) {
                 const currentRequirement = openRequirements.shift();
+                // check for fixed versions
                 let version = currentRequirement.peer && ((_a = selectedPackageVersions.find((rp) => rp.name === currentRequirement.name)) === null || _a === void 0 ? void 0 : _a.semVerInfo);
+                // @TODO: make package bundles more robust
                 if (!version) {
                     // bundled packages need to be of the same version
                     version = (_b = selectedPackageVersions.find((rp) => util_1.PACKAGE_BUNDLES.some((pb) => rp.name.startsWith(pb) && currentRequirement.name.startsWith(pb)))) === null || _b === void 0 ? void 0 : _b.semVerInfo;
                 }
                 let availableVersions;
+                // available versions include either the fixed version only or all versions from npm registry in descending order
                 if (version) {
                     availableVersions = [version];
                 }
@@ -112,28 +142,33 @@ class Evaluator {
                         .sort(compare_versions_1.compareVersions)
                         .reverse();
                 }
+                // if the package has a pinned version, check if its valid and filter available version by it
                 const pinnedVersion = this.heuristics[currentRequirement.name].pinnedVersion;
                 if ((0, semver_1.validRange)(pinnedVersion)) {
                     availableVersions = availableVersions.filter((v) => v && (0, compare_versions_1.satisfies)(v, pinnedVersion));
                 }
-                const versionReference = this.getVersionReference(availableVersions, semver_1.major);
                 // if version requirement is no valid requirement, remove it entirely
                 // @TODO: handle versions that are urls or prefixed: with npm:, file:, etc.
                 const versionRequirement = (0, semver_1.validRange)(currentRequirement.versionRequirement);
                 if (!versionRequirement) {
                     delete currentRequirement.versionRequirement;
                 }
+                // find a reasonable reference version
+                const versionReference = this.getVersionReference(availableVersions, semver_1.major);
                 let compatibleVersions = versionRequirement && versionRequirement !== '*'
-                    ? availableVersions.filter((v) => v && (0, compare_versions_1.satisfies)(v, versionRequirement.replace('ˆ', '^')))
-                    : availableVersions.filter((v) => {
-                        var _a;
-                        return v &&
-                            (0, semver_1.major)(v) <= (0, semver_1.major)(versionReference) && // version should be below the reference
-                            (0, compare_versions_1.compareVersions)(v, Math.max((0, semver_1.major)(versionReference) - this.allowedMajorVersions, 0).toString()) !== -1 &&
-                            (((_a = this.heuristics[currentRequirement.name]) === null || _a === void 0 ? void 0 : _a.isDirectDependency) || this.allowPreReleases || !v.includes('-'));
-                    });
+                    ? // if there is a version requirement, compatible version have to satisfy this requirement
+                        availableVersions.filter((v) => v && (0, compare_versions_1.satisfies)(v, versionRequirement.replace('ˆ', '^')))
+                    : // otherwise compatible versions must be below the reference, in the allowed major version range and satisfy the pre-release constraint
+                        availableVersions.filter((v) => {
+                            var _a;
+                            return v &&
+                                (0, semver_1.major)(v) <= (0, semver_1.major)(versionReference) &&
+                                (0, compare_versions_1.compareVersions)(v, Math.max((0, semver_1.major)(versionReference) - this.allowedMajorVersions, 0).toString()) !== -1 &&
+                                (!v.includes('-') || (!((_a = this.heuristics[currentRequirement.name]) === null || _a === void 0 ? void 0 : _a.isDirectDependency) && this.allowPreReleases));
+                        });
+                // also filter them by their allowed minor and patch range
                 compatibleVersions = this.getVersionsInMinorAndPatchRange(compatibleVersions);
-                // remove set if needed
+                // remove package set if needed
                 if (!this.force) {
                     this.packageSets = this.packageSets.filter((ps) => ps.filter((entry) => entry[1]).some((entry) => !selectedPackageVersions.map((rp) => rp.name).includes(entry[0])));
                 }
@@ -144,23 +179,29 @@ class Evaluator {
                 }
                 let conflictState = { state: util_1.State.CONFLICT };
                 let backtracking = false;
+                // go through all compatible versions
                 for (const versionToExplore of compatibleVersions) {
-                    // collect metric
                     if (conflictState.state === util_1.State.CONFLICT) {
+                        // skip over versions that violate pre-release constraint
                         if (!((_c = this.heuristics[currentRequirement.name]) === null || _c === void 0 ? void 0 : _c.isDirectDependency) && !this.allowPreReleases && versionToExplore.includes('-')) {
                             continue;
                         }
+                        // collect metric
                         this.metrics.checkedVersions++;
+                        // load package details and update peers heuristic
                         const packageDetails = yield this.client.getPackageDetails(currentRequirement.name, versionToExplore);
                         if (packageDetails.peerDependencies) {
                             this.heuristics[currentRequirement.name].peers = Object.keys(packageDetails.peerDependencies);
                         }
+                        // update open requirements
                         const { newOpenRequirements, newEdges } = yield this.addDependenciesToOpenSet(packageDetails, closedRequirements, openRequirements, edges);
+                        // go to next evaluation step with updated requirements and selected versions
                         conflictState = yield this.evaluationStep(currentRequirement.peer &&
                             !selectedPackageVersions.some((rp) => rp.name === packageDetails.name && rp.semVerInfo === packageDetails.version)
                             ? [...selectedPackageVersions, { name: packageDetails.name, semVerInfo: packageDetails.version }]
                             : selectedPackageVersions, [...closedRequirements, currentRequirement], newOpenRequirements, newEdges);
-                        // direct backtracking to package from a set
+                        // directly backtrack to a package from a set, if current requirement is not a peer dependency
+                        // otherwise try other versions too
                         if (!this.force &&
                             (this.packageSets.length || !currentRequirement.peer) &&
                             !this.packageSets.find((ps) => ps.find((entry) => entry[0] === currentRequirement.name))) {
@@ -169,33 +210,40 @@ class Evaluator {
                         }
                     }
                 }
+                // if no version is eligible and no backtracking is needed, a new package set is created for peer dependencies
                 if (conflictState.state === util_1.State.CONFLICT && !backtracking) {
                     this.heuristics[currentRequirement.name].conflictPotential++;
-                    // create set
                     if (!this.force && currentRequirement.peer) {
-                        const parent = (_d = edges.find((e) => e[1] === currentRequirement.name)) === null || _d === void 0 ? void 0 : _d[0];
+                        // retrieve old package set that includes parent of current requirement
+                        const parent = (_d = edges.find((edge) => edge[1] === currentRequirement.name)) === null || _d === void 0 ? void 0 : _d[0];
                         const oldPackageSet = this.packageSets.find((ps) => ps.find((entry) => entry[0] === parent));
                         let packageSet;
                         if (!oldPackageSet) {
+                            // create new set if old package set doesn't exist
                             packageSet = [];
                             this.packageSets.push(packageSet);
                         }
                         else {
                             packageSet = oldPackageSet;
                         }
-                        // TODO: check if this is correct
-                        if (!packageSet.find((e) => e[0] === currentRequirement.name && e[1] === currentRequirement.peer)) {
+                        // if package set has no entry matching the current requirement, add it
+                        if (!packageSet.find((entry) => entry[0] === currentRequirement.name && entry[1] === currentRequirement.peer)) {
                             packageSet.push([currentRequirement.name, currentRequirement.peer]);
                         }
-                        edges.forEach((e) => {
-                            if (e[1] === currentRequirement.name && !packageSet.find((entry) => entry[0] === e[0])) {
-                                const parentEdges = edges.filter((e2) => e2[1] === e[0]);
-                                const hasPeerParent = parentEdges.some((e2) => e2[2]);
-                                if (!packageSet.find((e2) => e2[0] === e[0] && e2[1] === hasPeerParent)) {
-                                    packageSet.push([e[0], hasPeerParent]);
+                        // adds parents of current requirement and their non-peer parents to package set
+                        edges.forEach((edge) => {
+                            // for every parent of current requirement that isn't already in package set
+                            if (edge[1] === currentRequirement.name && !packageSet.find((entry) => entry[0] === edge[0])) {
+                                // check if parent is peer itself
+                                const parentEdges = edges.filter((parentEdge) => parentEdge[1] === edge[0]);
+                                const hasPeerParent = parentEdges.some((parentEdge) => parentEdge[2]);
+                                // add parent (with peer status) to package set, if not already included
+                                if (!packageSet.find((entry) => entry[0] === edge[0] && entry[1] === hasPeerParent)) {
+                                    packageSet.push([edge[0], hasPeerParent]);
                                 }
+                                // add parents of parent to package set, if they are no peer and not already included
                                 for (const parentEdge of parentEdges) {
-                                    if (!packageSet.find((e2) => e2[0] === parentEdge[0] && !e2[1])) {
+                                    if (!packageSet.find((entry) => entry[0] === parentEdge[0] && !entry[1])) {
                                         packageSet.push([parentEdge[0], false]);
                                     }
                                 }
@@ -209,14 +257,24 @@ class Evaluator {
                 // collect metrics
                 this.metrics.resolvedPackages = closedRequirements.length;
                 this.metrics.resolvedPeers = selectedPackageVersions.length;
+                // if all open requirements are closed, return the selected package versions and leave recursion
                 return { result: selectedPackageVersions, state: util_1.State.OK };
             }
         });
     }
+    /**
+     * updates the open requirements with new dependencies of the current package
+     * @param packageDetails details of the current package with peer dependencies and dependencies
+     * @param closedRequirements the already closed requirements
+     * @param openRequirements the current open requirements
+     * @param edges all edges between packages, that have been seen
+     * @private
+     */
     addDependenciesToOpenSet(packageDetails, closedRequirements, openRequirements, edges) {
         return tslib_1.__awaiter(this, void 0, void 0, function* () {
             let newOpenRequirements = [...openRequirements];
             const newEdges = [...edges];
+            // get possible new requirements from package details of the current package
             const newRequirements = [
                 ...(packageDetails.peerDependencies
                     ? Object.entries(packageDetails.peerDependencies).map(([name, versionRequirement]) => ({
@@ -233,16 +291,18 @@ class Evaluator {
                     }))
                     : []),
             ];
-            // add requirements to open requirements if needed & create heuristics if none exist
+            // add new requirement to open requirements if not already closed or included & create edge & heuristic if needed
             for (const newRequirement of newRequirements) {
                 if (!newOpenRequirements.some((pr) => pr.name === newRequirement.name && pr.versionRequirement === newRequirement.versionRequirement) &&
                     !closedRequirements.some((pr) => pr.name === newRequirement.name && pr.versionRequirement === newRequirement.versionRequirement)) {
                     newOpenRequirements.push(newRequirement);
                     const existingEdge = newEdges.find((e) => e[0] === packageDetails.name && e[1] === newRequirement.name);
                     if (existingEdge) {
-                        existingEdge[2] = newRequirement.peer; // TODO: check if this is correct
+                        // change peer status of existing edge
+                        existingEdge[2] = newRequirement.peer;
                     }
                     else {
+                        // add edge between current package and its dependency
                         newEdges.push([packageDetails.name, newRequirement.name, newRequirement.peer]);
                     }
                     yield this.createHeuristics(newRequirement.name);
@@ -253,21 +313,33 @@ class Evaluator {
             return { newOpenRequirements, newEdges };
         });
     }
+    /**
+     * creates new heuristic entry for a package if not already existing
+     * @param name package name
+     * @param pinnedVersion pinned version of package (optional)
+     * @param isDirectDependency if the package is a direct dependency
+     * @private
+     */
     createHeuristics(name, pinnedVersion, isDirectDependency = false) {
         return tslib_1.__awaiter(this, void 0, void 0, function* () {
             if (!this.heuristics[name]) {
+                // retrieve possible versions and mean size of all versions
                 const { versions, meanSize } = yield this.client.getAllVersionsFromRegistry(name);
+                // sort versions descending
                 versions.sort(compare_versions_1.compareVersions);
                 versions.reverse();
                 // use a version as reference that is in the expected range
                 const versionReference = this.getVersionReference(versions, semver_1.major);
+                // get filtered versions that are below the reference, in the allowed major version range
+                // and that satisfy the pinned versions and pre-release constraint
                 let versionsForPeers = versions.filter((v) => v &&
-                    (0, semver_1.major)(v) <= (0, semver_1.major)(versionReference) && // version should be below the reference
+                    (0, semver_1.major)(v) <= (0, semver_1.major)(versionReference) &&
                     (0, compare_versions_1.compareVersions)(v, Math.max((0, semver_1.major)(versionReference) - this.allowedMajorVersions, 0).toString()) !== -1 &&
-                    (isDirectDependency || this.allowPreReleases || !v.includes('-')) &&
+                    (!v.includes('-') || (!isDirectDependency && this.allowPreReleases)) &&
                     (!pinnedVersion || (0, compare_versions_1.satisfies)(v, pinnedVersion)));
+                // also filter them by their allowed minor and patch range
                 versionsForPeers = this.getVersionsInMinorAndPatchRange(versionsForPeers);
-                // peers heuristic
+                // get peer dependencies of all these versions and add them to the peers of this heuristic
                 const peers = [];
                 for (const version of versionsForPeers) {
                     const { peerDependencies } = yield this.client.getPackageDetails(name, version);
@@ -279,6 +351,7 @@ class Evaluator {
                         }
                     }
                 }
+                // create the actual heuristic entry with all values
                 this.heuristics[name] = {
                     conflictPotential: 0,
                     isDirectDependency,
@@ -290,14 +363,26 @@ class Evaluator {
             }
         });
     }
+    /**
+     * find a reasonable reference version that is not more than 1 away from its predecessor
+     * @param versions all versions that possible
+     * @param func compare function for versions (major, minor or patch)
+     * @private
+     */
     getVersionReference(versions, func) {
         return versions.length === 1
             ? versions[0]
             : versions.find((version, idx, array) => func(version) - (array[idx + 1] ? func(array[idx + 1]) : 0) <= 1);
     }
+    /**
+     * get filtered versions that are in the allowed range of minor and patch versions
+     * @param versions versions to filter
+     * @private
+     */
     getVersionsInMinorAndPatchRange(versions) {
         const result = [];
         const majorVersions = (0, lodash_1.uniq)(versions.map((v) => (0, semver_1.major)(v)));
+        // for each major version, only use allowed number of minor and patch versions
         for (const majorVersion of majorVersions) {
             const currentVersions = versions.filter((v) => (0, semver_1.major)(v) === majorVersion);
             result.push(...currentVersions.slice(0, this.allowedMinorAndPatchVersions));
@@ -311,10 +396,10 @@ class Evaluator {
      */
     sortByHeuristics(packageRequirements) {
         var _a;
-        // topological search with peers
         const nodes = [];
         const edges = [];
         const indirectEdges = [];
+        // add peer dependencies to nodes and their important connections to edges
         for (const pr of packageRequirements) {
             if (pr.peer && !nodes.includes(pr.name)) {
                 nodes.push(pr.name);
@@ -342,10 +427,12 @@ class Evaluator {
                 }
             }
         }
+        // perform topological search with defined nodes and edges
         const order = toposort_1.default.array(nodes, edges);
+        // split the requirements in those with peers (always first) and those without peers (always second)
         const upper = packageRequirements.filter((pr) => nodes.includes(pr.name));
         const lower = packageRequirements.filter((pr) => !nodes.includes(pr.name));
-        // sorting of package requirements with peers
+        // sorting of package requirements with peers by topological order
         upper.sort((pr1, pr2) => {
             if (order.indexOf(pr1.name) > order.indexOf(pr2.name)) {
                 return 1;
@@ -392,7 +479,13 @@ class Evaluator {
         });
         return [...upper, ...lower];
     }
+    /**
+     * get range between versions with type (major, minor, patch) and value (versions of type between them)
+     * @param versions versions to get maximum range of
+     * @private
+     */
     getRangeBetweenVersions(versions) {
+        // get highest and lowest versions that are reasonable
         const v1 = this.getVersionReference(versions, semver_1.major);
         const v2 = versions[versions.length - 1];
         let type = (0, semver_1.diff)(v1, v2);
@@ -415,10 +508,16 @@ class Evaluator {
         }
         return { type, value: Math.abs(value) };
     }
+    /**
+     * get pinned versions declared in command line parameter or package.json
+     * @param params command line parameters including packages to install
+     * @param dependencies dependencies specified in package.json
+     * @private
+     */
     getPinnedVersions(params, dependencies) {
         return tslib_1.__awaiter(this, void 0, void 0, function* () {
             const pinnedVersions = {};
-            let pinPackageJsonVersions = false;
+            // in case of install command, retrieve package names and versions from parameters
             const command = params.shift();
             if (command === 'i' || command === 'install') {
                 if (params.length) {
@@ -427,6 +526,7 @@ class Evaluator {
                         if (typeof param === 'number') {
                             continue;
                         }
+                        // either take version from parameter or from registry client and add it to pinned versions
                         const paramSplit = param.split(/(?<!^)@/);
                         const name = paramSplit.shift();
                         if (!paramSplit.length) {
@@ -439,10 +539,9 @@ class Evaluator {
                     }
                     return pinnedVersions;
                 }
-                pinPackageJsonVersions = true;
             }
-            if (pinPackageJsonVersions || this.pinVersions) {
-                // get versions from dependencies
+            // if pinVersions option is set, add versions from package.json to pinned versions
+            if (this.pinVersions) {
                 Object.entries(dependencies)
                     .filter(([name]) => !pinnedVersions[name])
                     .forEach(([name, version]) => (pinnedVersions[name] = version));

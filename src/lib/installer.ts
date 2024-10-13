@@ -25,7 +25,7 @@ export class Installer {
   public createMetricsFile(metrics: Metrics, packageJsonPath: string) {
     const packageJson: PackageJson = JSON.parse(readFileSync(packageJsonPath, { encoding: 'utf8' }));
 
-    let metricsString = `Repository: ${packageJson.name || 'Unknown'}\n\n`;
+    let metricsString = `repository: ${packageJson.name || 'unknown'}\n\n`;
     // format metrics to be more human-readable
     for (const [metric, value] of Object.entries(metrics)) {
       metricsString += `${metric.replace(/([A-Z])/g, ' $1').toLowerCase()}: ${value}\n`;

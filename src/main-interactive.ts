@@ -7,7 +7,6 @@ import { hideBin } from 'yargs/helpers';
 
 import {
   ArgumentType,
-  PACKAGE_BUNDLES,
   State,
   Evaluator,
   Installer,
@@ -151,8 +150,8 @@ async function run(args: ArgumentsCamelCase) {
     }
 
     // get nx and Angular versions (if their packages will be installed) and ask user if migrations should be made
-    const nxVersion = conflictState.result.find((rp) => rp.name.startsWith(PACKAGE_BUNDLES[0]))?.semVerInfo;
-    const ngPackages = conflictState.result.filter((rp) => rp.name.startsWith(PACKAGE_BUNDLES[1]));
+    const nxVersion = conflictState.result.find((rp) => rp.name.startsWith('@nx'))?.semVerInfo;
+    const ngPackages = conflictState.result.filter((rp) => rp.name.startsWith('@angular'));
     const runMigrations =
       args[ArgumentType.MIGRATE] != null ? !!args[ArgumentType.MIGRATE] : showPrompts && (await promptQuestion<boolean>('run_migrations'));
 

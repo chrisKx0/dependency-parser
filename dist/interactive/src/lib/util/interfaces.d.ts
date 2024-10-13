@@ -5,6 +5,7 @@ export declare enum ArgumentType {
     COLLECT_METRICS = "collect-metrics",
     EXCLUDE = "exclude",
     FORCE = "force",
+    INCLUDE = "include",
     INSTALL = "install",
     MAJOR_VERSIONS = "major-versions",
     MINOR_VERSIONS = "minor-versions",
@@ -17,6 +18,12 @@ export declare enum ArgumentType {
     RETRY = "retry",
     SKIP_PROMPTS = "skip-prompts"
 }
+export declare enum Severity {
+    INFO = "info",
+    SUCCESS = "success",
+    WARNING = "warning",
+    ERROR = "error"
+}
 export declare enum State {
     OK = "OK",
     CONFLICT = "CONFLICT"
@@ -27,6 +34,10 @@ export interface ArgsUnattended {
 export interface ConflictState {
     result?: ResolvedPackage[] | PackageRequirement[];
     state: State;
+}
+export interface EvaluationResult {
+    conflictState: ConflictState;
+    metrics: Metrics;
 }
 export interface Heuristics {
     conflictPotential: number;

@@ -9,7 +9,6 @@ import {
   Evaluator,
   getPackageRegex,
   Installer,
-  PACKAGE_BUNDLES,
   State,
 } from './lib';
 
@@ -56,7 +55,7 @@ export async function run() {
     const installer = new Installer();
     installer.updatePackageJson(conflictState.result, packageJsonPath + '/package.json');
     // create nx-version action output for later steps if Nx got updated
-    const nxVersion = conflictState.result.find((rp) => rp.name.startsWith(PACKAGE_BUNDLES[0]))?.semVerInfo;
+    const nxVersion = conflictState.result.find((rp) => rp.name.startsWith('@nx'))?.semVerInfo;
     if (nxVersion) {
       core.info('Nx version: ' + nxVersion);
       core.setOutput('nx-version', nxVersion);

@@ -1,7 +1,7 @@
 import { ReleaseType } from 'semver';
 
 // array positions must be kept
-export const PACKAGE_BUNDLES = ['@nx', '@angular'];
+export const PACKAGE_BUNDLES = ['@nx']; // @TODO add bundles like @angular, @nestjs when they are more robust
 
 export enum ArgumentType {
   ALL_DEPENDENCIES = 'all-dependencies',

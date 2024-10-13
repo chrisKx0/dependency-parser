@@ -11,33 +11,39 @@ function run() {
         // get path of the package.json file inside the workspace
         const workspaceRoot = process.env.GITHUB_WORKSPACE || '';
         const packageJsonPath = path.normalize(path.join(workspaceRoot, core.getInput('package-json-path')));
-        // initialize evaluator
+        // get GitHub action inputs
         const allowedMajorVersions = parseInt(core.getInput('allowed-major-versions', { trimWhitespace: true })) || 2;
         const allowedMinorAndPatchVersions = parseInt(core.getInput('allowed-minor-versions', { trimWhitespace: true })) || 10;
         const allowPreReleases = core.getInput('allow-pre-releases', { trimWhitespace: true }) !== 'false';
-        const excludedPackages = (core.getInput('exclude').split(' ') || []).map(lib_1.exclude).filter((ep) => ep);
         const force = core.getInput('force', { trimWhitespace: true }) !== 'false';
         const pinVersions = core.getInput('keep-versions', { trimWhitespace: true }) === 'true';
+        // initialize excluded and included packages
+        const excludedPackages = (core.getInput('exclude').split(' ') || []).map(lib_1.getPackageRegex).filter((ep) => ep);
+        const includedPackages = (core.getInput('include').split(' ') || []).map(lib_1.getPackageRegex).filter((ep) => ep);
+        // initialize evaluator
         const evaluator = new lib_1.Evaluator(allowedMajorVersions, allowedMinorAndPatchVersions, allowPreReleases, pinVersions, force);
         core.info('-- Preparing dependency resolution --');
-        // run preparation
-        const openRequirements = yield evaluator.prepare({ path: packageJsonPath }, excludedPackages);
+        // perform preparation to get initial open requirements
+        const openRequirements = yield evaluator.prepare({ path: packageJsonPath }, excludedPackages, includedPackages);
         (0, lib_1.createOpenRequirementOutput)(openRequirements, false);
         core.info('-- Performing dependency resolution --');
         // run evaluation
-        let conflictState;
+        let conflictState = { state: lib_1.State.CONFLICT };
         try {
+            // perform evaluation to get resolved packages
             const result = yield evaluator.evaluate(openRequirements);
             conflictState = result.conflictState;
         }
         catch (e) {
-            conflictState = { state: lib_1.State.CONFLICT };
+            core.info(e.message);
         }
+        // in case of no conflict, create action output and update package.json
         if (conflictState.state === 'OK' && (0, lib_1.areResolvedPackages)(conflictState.result)) {
             (0, lib_1.createResolvedPackageOutput)(conflictState.result, false);
             const installer = new lib_1.Installer();
             installer.updatePackageJson(conflictState.result, packageJsonPath + '/package.json');
-            const nxVersion = (_a = conflictState.result.find((rp) => rp.name.startsWith(lib_1.PACKAGE_BUNDLES[0]))) === null || _a === void 0 ? void 0 : _a.semVerInfo;
+            // create nx-version action output for later steps if Nx got updated
+            const nxVersion = (_a = conflictState.result.find((rp) => rp.name.startsWith('@nx'))) === null || _a === void 0 ? void 0 : _a.semVerInfo;
             if (nxVersion) {
                 core.info('Nx version: ' + nxVersion);
                 core.setOutput('nx-version', nxVersion);
