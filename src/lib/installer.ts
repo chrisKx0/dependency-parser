@@ -20,13 +20,17 @@ export class Installer {
   /**
    * creates a new metrics file in file system
    * @param metrics the metrics of the last evaluation run
+   * @param packageJsonPath path to package.json file to retrieve repository name
    */
-  public createMetricsFile(metrics: Metrics) {
-    let metricsString = '';
+  public createMetricsFile(metrics: Metrics, packageJsonPath: string) {
+    const packageJson: PackageJson = JSON.parse(readFileSync(packageJsonPath, { encoding: 'utf8' }));
+
+    let metricsString = `Repository: ${packageJson.name || 'Unknown'}\n\n`;
     // format metrics to be more human-readable
     for (const [metric, value] of Object.entries(metrics)) {
       metricsString += `${metric.replace(/([A-Z])/g, ' $1').toLowerCase()}: ${value}\n`;
     }
+
     const path = __dirname + '/../../data';
     if (!existsSync(path)) {
       mkdirSync(path);

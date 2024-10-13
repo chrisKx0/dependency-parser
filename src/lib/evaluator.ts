@@ -27,6 +27,10 @@ import {
   EvaluationResult,
 } from './util';
 
+/**
+ * checks if args are of type ArgumentsCamelCase
+ * @param args args of type ArgumentsCamelCase or ArgsUnattended
+ */
 function isArgumentsCamelCase(args: ArgumentsCamelCase | ArgsUnattended): args is ArgumentsCamelCase {
   return !!(args as ArgumentsCamelCase)._;
 }
@@ -95,7 +99,6 @@ export class Evaluator {
     this.client.readDataFromFiles();
 
     // get pinned versions for packages from command or package.json, if specified
-    // TODO: check if this is correct
     const dependencies = openRequirements.reduce(
       (acc, curr) => ({ ...acc, [curr.name]: packageJson.peerDependencies?.[curr.name] ?? packageJson.dependencies?.[curr.name] }),
       {},
@@ -278,32 +281,38 @@ export class Evaluator {
       if (conflictState.state === State.CONFLICT && !backtracking) {
         this.heuristics[currentRequirement.name].conflictPotential++;
         if (!this.force && currentRequirement.peer) {
-          // retrieve old package set or create new one
-          const parent = edges.find((e) => e[1] === currentRequirement.name)?.[0];
+          // retrieve old package set that includes parent of current requirement
+          const parent = edges.find((edge) => edge[1] === currentRequirement.name)?.[0];
           const oldPackageSet = this.packageSets.find((ps) => ps.find((entry) => entry[0] === parent));
           let packageSet: PackageSet;
 
           if (!oldPackageSet) {
+            // create new set if old package set doesn't exist
             packageSet = [];
             this.packageSets.push(packageSet);
           } else {
             packageSet = oldPackageSet;
           }
 
-          // add those packages to a set, that are a peer dependency or connected to one
-          // TODO: check if this is correct
-          if (!packageSet.find((e) => e[0] === currentRequirement.name && e[1] === currentRequirement.peer)) {
+          // if package set has no entry matching the current requirement, add it
+          if (!packageSet.find((entry) => entry[0] === currentRequirement.name && entry[1] === currentRequirement.peer)) {
             packageSet.push([currentRequirement.name, currentRequirement.peer]);
           }
-          edges.forEach((e) => {
-            if (e[1] === currentRequirement.name && !packageSet.find((entry) => entry[0] === e[0])) {
-              const parentEdges = edges.filter((e2) => e2[1] === e[0]);
-              const hasPeerParent = parentEdges.some((e2) => e2[2]);
-              if (!packageSet.find((e2) => e2[0] === e[0] && e2[1] === hasPeerParent)) {
-                packageSet.push([e[0], hasPeerParent]);
+
+          // adds parents of current requirement and their non-peer parents to package set
+          edges.forEach((edge) => {
+            // for every parent of current requirement that isn't already in package set
+            if (edge[1] === currentRequirement.name && !packageSet.find((entry) => entry[0] === edge[0])) {
+              // check if parent is peer itself
+              const parentEdges = edges.filter((parentEdge) => parentEdge[1] === edge[0]);
+              const hasPeerParent = parentEdges.some((parentEdge) => parentEdge[2]);
+              // add parent (with peer status) to package set, if not already included
+              if (!packageSet.find((entry) => entry[0] === edge[0] && entry[1] === hasPeerParent)) {
+                packageSet.push([edge[0], hasPeerParent]);
               }
+              // add parents of parent to package set, if they are no peer and not already included
               for (const parentEdge of parentEdges) {
-                if (!packageSet.find((e2) => e2[0] === parentEdge[0] && !e2[1])) {
+                if (!packageSet.find((entry) => entry[0] === parentEdge[0] && !entry[1])) {
                   packageSet.push([parentEdge[0], false]);
                 }
               }
@@ -358,18 +367,19 @@ export class Evaluator {
         : []),
     ];
 
-    // add new requirement to open requirements if not already closed or included & create heuristic if needed
+    // add new requirement to open requirements if not already closed or included & create edge & heuristic if needed
     for (const newRequirement of newRequirements) {
       if (
         !newOpenRequirements.some((pr) => pr.name === newRequirement.name && pr.versionRequirement === newRequirement.versionRequirement) &&
         !closedRequirements.some((pr) => pr.name === newRequirement.name && pr.versionRequirement === newRequirement.versionRequirement)
       ) {
         newOpenRequirements.push(newRequirement);
-        // add edge between current package and its dependency, if it not already exists
         const existingEdge = newEdges.find((e) => e[0] === packageDetails.name && e[1] === newRequirement.name);
         if (existingEdge) {
-          existingEdge[2] = newRequirement.peer; // TODO: check if this is correct
+          // change peer status of existing edge
+          existingEdge[2] = newRequirement.peer;
         } else {
+          // add edge between current package and its dependency
           newEdges.push([packageDetails.name, newRequirement.name, newRequirement.peer]);
         }
         await this.createHeuristics(newRequirement.name);

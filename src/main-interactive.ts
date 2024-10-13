@@ -100,15 +100,15 @@ async function run(args: ArgumentsCamelCase) {
 
     const installer = new Installer();
 
-    if (collectMetrics) {
-      // create metrics file when flag was set
-      installer.createMetricsFile({ ...result.metrics, durationPreparation, durationEvaluation });
-    }
-
     // get paths of package.json and nx.json
     const path = (args[ArgumentType.PATH] as string) ?? process.cwd();
     const packageJsonPath = path + '/package.json';
     const nxPath = path + '/nx.json';
+
+    if (collectMetrics) {
+      // create metrics file when flag was set
+      installer.createMetricsFile({ ...result.metrics, durationPreparation, durationEvaluation }, packageJsonPath);
+    }
 
     // user choice if package.json should be updated
     if (

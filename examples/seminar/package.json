@@ -1,4 +1,5 @@
 {
+  "name": "seminar",
   "peerDependencies": {
     "@angular/common": "18.2.7",
     "keycloak-angular": "16.0.1"
