@@ -445,11 +445,29 @@ class Evaluator {
         lower.sort((pr1, pr2) => {
             const heuristics1 = this.heuristics[pr1.name];
             const heuristics2 = this.heuristics[pr2.name];
+            // mean size
+            if (heuristics1.meanSize !== heuristics2.meanSize) {
+                return heuristics1.meanSize - heuristics2.meanSize;
+            }
             // direct dependencies
             if (heuristics1.isDirectDependency && !heuristics2.isDirectDependency) {
                 return 1;
             }
             else if (!heuristics1.isDirectDependency && heuristics2.isDirectDependency) {
+                return -1;
+            }
+            // version range
+            const versionRange1 = heuristics1.versionRange;
+            const versionRange2 = heuristics2.versionRange;
+            if (versionRange1.type === versionRange2.type) {
+                if (versionRange1.value !== versionRange2.value) {
+                    return versionRange1.value - versionRange2.value;
+                }
+            }
+            else if (heuristics1.versionRange.type.endsWith('major') || heuristics2.versionRange.type.endsWith('patch')) {
+                return 1;
+            }
+            else if (heuristics1.versionRange.type.endsWith('patch') || heuristics2.versionRange.type.endsWith('minor')) {
                 return -1;
             }
             // conflict potential
@@ -459,23 +477,7 @@ class Evaluator {
             else if (heuristics1.conflictPotential < heuristics2.conflictPotential) {
                 return -1;
             }
-            // version range & size
-            const versionRange1 = heuristics1.versionRange;
-            const versionRange2 = heuristics2.versionRange;
-            if (versionRange1.type === versionRange2.type) {
-                if (versionRange1.value !== versionRange2.value) {
-                    return versionRange1.value - versionRange2.value;
-                }
-                else {
-                    return heuristics1.meanSize - heuristics2.meanSize;
-                }
-            }
-            else if (heuristics1.versionRange.type.endsWith('major') || heuristics2.versionRange.type.endsWith('patch')) {
-                return 1;
-            }
-            else {
-                return -1;
-            }
+            return 0;
         });
         return [...upper, ...lower];
     }

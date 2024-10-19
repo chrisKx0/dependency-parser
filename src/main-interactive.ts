@@ -64,7 +64,7 @@ async function run(args: ArgumentsCamelCase) {
 
   // user choice of the packages to be included in package resolution
   if (showPrompts && !args[ArgumentType.ALL_DEPENDENCIES]) {
-    const names = openRequirements.map((pr) => pr.name);
+    const names = openRequirements.map((pr) => pr.name).sort();
     const requirementsToConsider = await promptQuestion<string[]>('choose_dependencies_to_resolve', names, names);
     openRequirements = openRequirements.filter((pr) => requirementsToConsider.includes(pr.name));
   } else {
