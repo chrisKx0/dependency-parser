@@ -34,7 +34,11 @@ export async function run() {
   core.info('-- Preparing dependency resolution --');
 
   // perform preparation to get initial open requirements
-  const openRequirements = await evaluator.prepare({ path: packageJsonPath }, excludedPackages, includedPackages);
+  const { openRequirements, additionalPackagesToInstall } = await evaluator.prepare(
+    { path: packageJsonPath },
+    excludedPackages,
+    includedPackages,
+  );
   createOpenRequirementOutput(openRequirements, false);
 
   core.info('-- Performing dependency resolution --');
@@ -53,7 +57,7 @@ export async function run() {
   if (conflictState.state === 'OK' && areResolvedPackages(conflictState.result)) {
     createResolvedPackageOutput(conflictState.result, false);
     const installer = new Installer();
-    installer.updatePackageJson(conflictState.result, packageJsonPath + '/package.json');
+    installer.updatePackageJson(conflictState.result, additionalPackagesToInstall, packageJsonPath + '/package.json');
     // create nx-version action output for later steps if Nx got updated
     const nxVersion = conflictState.result.find((rp) => rp.name.startsWith('@nx'))?.semVerInfo;
     if (nxVersion) {

@@ -134,9 +134,10 @@ class Installer {
     /**
      * updates the package.json file with the resolved package versions
      * @param resolvedPackages resolved packages with their versions
+     * @param additionalPackagesToInstall names of the additionally installed packages via install command
      * @param path path to the package.json file
      */
-    updatePackageJson(resolvedPackages, path) {
+    updatePackageJson(resolvedPackages, additionalPackagesToInstall, path) {
         var _a, _b;
         const packageJson = JSON.parse((0, fs_1.readFileSync)(path, { encoding: 'utf8' }));
         // go through existing peer dependencies and dependencies and update their versions
@@ -147,6 +148,16 @@ class Installer {
             else if ((_b = packageJson.dependencies) === null || _b === void 0 ? void 0 : _b[resolvedPackage.name]) {
                 packageJson.dependencies[resolvedPackage.name] = resolvedPackage.semVerInfo;
             }
+            else if (additionalPackagesToInstall.includes(resolvedPackage.name)) {
+                if (!packageJson.dependencies) {
+                    packageJson.dependencies = {};
+                }
+                packageJson.dependencies[resolvedPackage.name] = resolvedPackage.semVerInfo;
+            }
+        }
+        // sort dependencies if some were added
+        if (additionalPackagesToInstall.length) {
+            packageJson.dependencies = Object.fromEntries(Object.entries(packageJson.dependencies).sort((a, b) => a[0].localeCompare(b[0])));
         }
         (0, fs_1.writeFileSync)(path, JSON.stringify(packageJson, null, 2) + '\n', { encoding: 'utf8' });
     }

@@ -55,7 +55,8 @@ async function run(args: ArgumentsCamelCase) {
   startTime = performance.now();
 
   // perform preparation to get initial open requirements
-  let openRequirements = await evaluator.prepare(args, excludedPackages, includedPackages);
+  // eslint-disable-next-line prefer-const
+  let { openRequirements, additionalPackagesToInstall } = await evaluator.prepare(args, excludedPackages, includedPackages);
 
   endTime = performance.now();
   // calculate duration of preparation with start and end times
@@ -118,7 +119,7 @@ async function run(args: ArgumentsCamelCase) {
       return;
     }
 
-    installer.updatePackageJson(conflictState.result, packageJsonPath);
+    installer.updatePackageJson(conflictState.result, additionalPackagesToInstall, packageJsonPath);
 
     // user choice if dependencies should be installed
     if (

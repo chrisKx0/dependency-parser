@@ -24,7 +24,7 @@ function run() {
         const evaluator = new lib_1.Evaluator(allowedMajorVersions, allowedMinorAndPatchVersions, allowPreReleases, pinVersions, force);
         core.info('-- Preparing dependency resolution --');
         // perform preparation to get initial open requirements
-        const openRequirements = yield evaluator.prepare({ path: packageJsonPath }, excludedPackages, includedPackages);
+        const { openRequirements, additionalPackagesToInstall } = yield evaluator.prepare({ path: packageJsonPath }, excludedPackages, includedPackages);
         (0, lib_1.createOpenRequirementOutput)(openRequirements, false);
         core.info('-- Performing dependency resolution --');
         // run evaluation
@@ -41,7 +41,7 @@ function run() {
         if (conflictState.state === 'OK' && (0, lib_1.areResolvedPackages)(conflictState.result)) {
             (0, lib_1.createResolvedPackageOutput)(conflictState.result, false);
             const installer = new lib_1.Installer();
-            installer.updatePackageJson(conflictState.result, packageJsonPath + '/package.json');
+            installer.updatePackageJson(conflictState.result, additionalPackagesToInstall, packageJsonPath + '/package.json');
             // create nx-version action output for later steps if Nx got updated
             const nxVersion = (_a = conflictState.result.find((rp) => rp.name.startsWith('@nx'))) === null || _a === void 0 ? void 0 : _a.semVerInfo;
             if (nxVersion) {

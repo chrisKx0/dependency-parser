@@ -18,7 +18,10 @@ export declare class Evaluator {
      * @param excludedPackages packages to exclude from preparation
      * @param includedPackages packages that are allowed as initial open requirements
      */
-    prepare(args: ArgumentsCamelCase | ArgsUnattended, excludedPackages: string[], includedPackages: string[]): Promise<PackageRequirement[]>;
+    prepare(args: ArgumentsCamelCase | ArgsUnattended, excludedPackages: string[], includedPackages: string[]): Promise<{
+        openRequirements: PackageRequirement[];
+        additionalPackagesToInstall: string[];
+    }>;
     /**
      * performs evaluation for open requirements
      * @param openRequirements initial open requirements of the evaluation

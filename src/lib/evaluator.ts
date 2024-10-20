@@ -66,7 +66,7 @@ export class Evaluator {
     args: ArgumentsCamelCase | ArgsUnattended,
     excludedPackages: string[],
     includedPackages: string[],
-  ): Promise<PackageRequirement[]> {
+  ): Promise<{ openRequirements: PackageRequirement[], additionalPackagesToInstall: string[] }> {
     // get package.json path from args or current working directory
     const path = ((args[ArgumentType.PATH] as string) ?? process.cwd()) + '/package.json';
 
@@ -131,7 +131,7 @@ export class Evaluator {
     // save cache to disk
     this.client.writeDataToFiles();
 
-    return openRequirements;
+    return { openRequirements, additionalPackagesToInstall: Object.keys(pinnedVersions) };
   }
 
   /**
@@ -632,11 +632,10 @@ export class Evaluator {
           // either take version from parameter or from registry client and add it to pinned versions
           const paramSplit = param.split(/(?<!^)@/);
           const name = paramSplit.shift();
-          if (!paramSplit.length) {
-            const versions = (await this.client.getAllVersionsFromRegistry(name)).versions.sort(compareVersions).reverse();
-            pinnedVersions[name] = versions[0];
-          } else {
+          if (paramSplit.length) {
             pinnedVersions[name] = paramSplit.shift();
+          } else {
+            pinnedVersions[name] = null;
           }
         }
         return pinnedVersions;

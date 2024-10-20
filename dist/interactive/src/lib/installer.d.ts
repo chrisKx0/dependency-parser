@@ -30,9 +30,10 @@ export declare class Installer {
     /**
      * updates the package.json file with the resolved package versions
      * @param resolvedPackages resolved packages with their versions
+     * @param additionalPackagesToInstall names of the additionally installed packages via install command
      * @param path path to the package.json file
      */
-    updatePackageJson(resolvedPackages: ResolvedPackage[], path: string): void;
+    updatePackageJson(resolvedPackages: ResolvedPackage[], additionalPackagesToInstall: string[], path: string): void;
     /**
      * checks whether an update tool is installed or not
      * @param tool name of the update tool (npm, pnpm, yarn, ng and nx)

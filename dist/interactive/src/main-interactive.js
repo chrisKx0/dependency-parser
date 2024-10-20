@@ -34,7 +34,8 @@ function run(args) {
         spinner.start();
         startTime = performance.now();
         // perform preparation to get initial open requirements
-        let openRequirements = yield evaluator.prepare(args, excludedPackages, includedPackages);
+        // eslint-disable-next-line prefer-const
+        let { openRequirements, additionalPackagesToInstall } = yield evaluator.prepare(args, excludedPackages, includedPackages);
         endTime = performance.now();
         // calculate duration of preparation with start and end times
         const durationPreparation = (endTime - startTime) / 1000;
@@ -86,7 +87,7 @@ function run(args) {
                 : !showPrompts || (yield (0, lib_1.promptQuestion)('modify_package_json')))) {
                 return;
             }
-            installer.updatePackageJson(conflictState.result, packageJsonPath);
+            installer.updatePackageJson(conflictState.result, additionalPackagesToInstall, packageJsonPath);
             // user choice if dependencies should be installed
             if (!(args[lib_1.ArgumentType.INSTALL] != null
                 ? !!args[lib_1.ArgumentType.INSTALL]

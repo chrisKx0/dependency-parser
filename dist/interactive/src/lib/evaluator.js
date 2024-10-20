@@ -96,7 +96,7 @@ class Evaluator {
             openRequirements = this.sortByHeuristics(openRequirements);
             // save cache to disk
             this.client.writeDataToFiles();
-            return openRequirements;
+            return { openRequirements, additionalPackagesToInstall: Object.keys(pinnedVersions) };
         });
     }
     /**
@@ -531,12 +531,11 @@ class Evaluator {
                         // either take version from parameter or from registry client and add it to pinned versions
                         const paramSplit = param.split(/(?<!^)@/);
                         const name = paramSplit.shift();
-                        if (!paramSplit.length) {
-                            const versions = (yield this.client.getAllVersionsFromRegistry(name)).versions.sort(compare_versions_1.compareVersions).reverse();
-                            pinnedVersions[name] = versions[0];
+                        if (paramSplit.length) {
+                            pinnedVersions[name] = paramSplit.shift();
                         }
                         else {
-                            pinnedVersions[name] = paramSplit.shift();
+                            pinnedVersions[name] = null;
                         }
                     }
                     return pinnedVersions;
