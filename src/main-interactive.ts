@@ -19,6 +19,7 @@ import {
   getPackageRegex,
   EvaluationResult,
   ConflictState,
+  PackageRequirement,
 } from './lib';
 
 async function run(args: ArgumentsCamelCase) {
@@ -54,14 +55,24 @@ async function run(args: ArgumentsCamelCase) {
   spinner.start();
   startTime = performance.now();
 
-  // perform preparation to get initial open requirements
-  // eslint-disable-next-line prefer-const
-  let { openRequirements, additionalPackagesToInstall } = await evaluator.prepare(args, excludedPackages, includedPackages);
+  let openRequirements: PackageRequirement[];
+  let additionalPackagesToInstall: string[];
+
+  try {
+    // perform preparation to get initial open requirements
+    const result = await evaluator.prepare(args, excludedPackages, includedPackages);
+    openRequirements = result.openRequirements;
+    additionalPackagesToInstall = result.additionalPackagesToInstall;
+    spinner.stop();
+  } catch (e) {
+    spinner.stop();
+    createMessage('preparation_failure', Severity.ERROR);
+    return;
+  }
 
   endTime = performance.now();
   // calculate duration of preparation with start and end times
   const durationPreparation = (endTime - startTime) / 1000;
-  spinner.stop();
 
   // user choice of the packages to be included in package resolution
   if (showPrompts && !args[ArgumentType.ALL_DEPENDENCIES]) {

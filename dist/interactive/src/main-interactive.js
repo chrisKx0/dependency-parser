@@ -33,13 +33,23 @@ function run(args) {
         let spinner = new clui_1.Spinner('Preparing dependency resolution...');
         spinner.start();
         startTime = performance.now();
-        // perform preparation to get initial open requirements
-        // eslint-disable-next-line prefer-const
-        let { openRequirements, additionalPackagesToInstall } = yield evaluator.prepare(args, excludedPackages, includedPackages);
+        let openRequirements;
+        let additionalPackagesToInstall;
+        try {
+            // perform preparation to get initial open requirements
+            const result = yield evaluator.prepare(args, excludedPackages, includedPackages);
+            openRequirements = result.openRequirements;
+            additionalPackagesToInstall = result.additionalPackagesToInstall;
+            spinner.stop();
+        }
+        catch (e) {
+            spinner.stop();
+            (0, lib_1.createMessage)('preparation_failure', lib_1.Severity.ERROR);
+            return;
+        }
         endTime = performance.now();
         // calculate duration of preparation with start and end times
         const durationPreparation = (endTime - startTime) / 1000;
-        spinner.stop();
         // user choice of the packages to be included in package resolution
         if (showPrompts && !args[lib_1.ArgumentType.ALL_DEPENDENCIES]) {
             const names = openRequirements.map((pr) => pr.name).sort();

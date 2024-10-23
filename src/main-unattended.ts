@@ -3,13 +3,11 @@ import * as path from 'path';
 
 import {
   areResolvedPackages,
-  ConflictState,
   createOpenRequirementOutput,
   createResolvedPackageOutput,
   Evaluator,
   getPackageRegex,
   Installer,
-  State,
 } from './lib';
 
 export async function run() {
@@ -33,39 +31,36 @@ export async function run() {
 
   core.info('-- Preparing dependency resolution --');
 
-  // perform preparation to get initial open requirements
-  const { openRequirements, additionalPackagesToInstall } = await evaluator.prepare(
-    { path: packageJsonPath },
-    excludedPackages,
-    includedPackages,
-  );
-  createOpenRequirementOutput(openRequirements, false);
-
-  core.info('-- Performing dependency resolution --');
-
-  // run evaluation
-  let conflictState: ConflictState = { state: State.CONFLICT };
   try {
-    // perform evaluation to get resolved packages
-    const result = await evaluator.evaluate(openRequirements);
-    conflictState = result.conflictState;
-  } catch (e) {
-    core.info(e.message);
-  }
+    // perform preparation to get initial open requirements
+    const { openRequirements, additionalPackagesToInstall } = await evaluator.prepare(
+      { path: packageJsonPath },
+      excludedPackages,
+      includedPackages,
+    );
+    createOpenRequirementOutput(openRequirements, false);
 
-  // in case of no conflict, create action output and update package.json
-  if (conflictState.state === 'OK' && areResolvedPackages(conflictState.result)) {
-    createResolvedPackageOutput(conflictState.result, false);
-    const installer = new Installer();
-    installer.updatePackageJson(conflictState.result, additionalPackagesToInstall, packageJsonPath + '/package.json');
-    // create nx-version action output for later steps if Nx got updated
-    const nxVersion = conflictState.result.find((rp) => rp.name.startsWith('@nx'))?.semVerInfo;
-    if (nxVersion) {
-      core.info('Nx version: ' + nxVersion);
-      core.setOutput('nx-version', nxVersion);
+    core.info('-- Performing dependency resolution --');
+
+    // perform evaluation to get resolved packages
+    const { conflictState } = await evaluator.evaluate(openRequirements);
+
+    // in case of no conflict, create action output and update package.json
+    if (conflictState.state === 'OK' && areResolvedPackages(conflictState.result)) {
+      createResolvedPackageOutput(conflictState.result, false);
+      const installer = new Installer();
+      installer.updatePackageJson(conflictState.result, additionalPackagesToInstall, packageJsonPath + '/package.json');
+      // create nx-version action output for later steps if Nx got updated
+      const nxVersion = conflictState.result.find((rp) => rp.name.startsWith('@nx'))?.semVerInfo;
+      if (nxVersion) {
+        core.info('Nx version: ' + nxVersion);
+        core.setOutput('nx-version', nxVersion);
+      }
+    } else {
+      core.error('Unable to evaluate dependencies with the provided parameters.');
     }
-  } else {
-    core.error('Unable to evaluate dependencies with the provided parameters');
+  } catch (e) {
+    core.error(e.message);
   }
 }
 
